@@ -3,6 +3,19 @@ set -e
 
 echo "🔧 Setting up Raspberry Pi audio stack..."
 
+
+
+sudo apt-get update
+sudo apt-get install -y \
+  alsa-utils \
+  mpd \
+  mpc \
+  speaker-test \
+  git \
+  nano
+  
+git clone https://github.com/aakison/boombox-pi.git
+
 # Copy configs
 cp mpd/mpd.conf /etc/mpd.conf
 cp audio/.asoundrc ~/.asoundrc
