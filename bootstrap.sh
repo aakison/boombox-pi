@@ -17,10 +17,9 @@ sudo apt-get install -y \
 git clone https://github.com/aakison/boombox-pi.git
 
 # Copy configs
-cp mpd/mpd.conf /etc/mpd.conf
-cp audio/.asoundrc ~/.asoundrc
-cp mounts/.smbcredentials ~/.smbcredentials
-chmod 600 ~/.smbcredentials
+cp bootstrap-pi/mpd.conf /etc/mpd.conf
+cp bootstrap-pi/asound.conf /etc/asound.conf
+
 
 # Enable services
 sudo systemctl enable mpd
