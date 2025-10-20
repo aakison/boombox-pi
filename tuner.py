@@ -18,6 +18,54 @@ class Band:
     def __str__(self):
         return f"Band {self.name}: {self.min_val}-{self.max_val} -> {self.url}"
 
+class DeeJay:
+    """Singleton class to handle band transitions and I2C control"""
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(DeeJay, cls).__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        if not DeeJay._initialized:
+            self.pin_state = 0xFF  # Initial state: all pins high
+            self.bus = smbus.SMBus(1)
+            self.i2c_address = 0x20
+            DeeJay._initialized = True
+    
+    def set_i2c_pin(self, pin, state):
+        """Set state of specific pin on PCF8574"""
+        if state:
+            self.pin_state |= (1 << pin)  # Set pin high
+        else:
+            self.pin_state &= ~(1 << pin)  # Set pin low
+    
+    def write_i2c_pins(self):
+        """Write current pin state to PCF8574"""
+        self.bus.write_byte(self.i2c_address, self.pin_state)
+    
+    def reset_i2c_pins(self):
+        """Reset all pins to high state"""
+        self.pin_state = 0xFF
+        self.write_i2c_pins()
+    
+    def Play(self, band, adc_value):
+        """Called when entering a band"""
+        print(f"Entered {band.name} (ADC: {adc_value})")
+        print(f"URL: {band.url}")
+        # Turn on pin 0 when entering any band
+        self.set_i2c_pin(0, False)  # Set pin 0 low (on)
+        self.write_i2c_pins()
+    
+    def Stop(self, band, adc_value):
+        """Called when leaving a band"""
+        print(f"Left {band.name} (ADC: {adc_value})")
+        # Turn off pin 0 when leaving any band
+        self.set_i2c_pin(0, True)  # Set pin 0 high (off)
+        self.write_i2c_pins()
+
 # MCP3008 ADC Configuration
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
@@ -31,10 +79,6 @@ spi.max_speed_hz = 10000
 spi.mode = 0
 spi.no_cs = True  # Disable automatic CS control
 
-# PCF8574 I2C Configuration
-I2C_ADDRESS = 0x20
-bus = smbus.SMBus(1)
-
 # Define bands with their ranges and URLs
 BANDS = [
     Band(305, 335, "http://abm21.com.au:8000/CONTAINER92", "Band 1"),
@@ -42,9 +86,11 @@ BANDS = [
     Band(430, 468, "http://abm21.com.au:8000/CONTAINER81", "Band 3")
 ]
 
+# Initialize DeeJay singleton
+dj = DeeJay()
+
 # Track current state
 current_range = None
-pin_state = 0xFF  # Initial state: all pins high
 
 def read_mcp3008(channel):
     """Read ADC value from MCP3008"""
@@ -57,24 +103,6 @@ def read_mcp3008(channel):
     GPIO.output(7, GPIO.HIGH)  # Deactivate MCP3008
     data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
     return data
-
-def set_i2c_pin(pin, state):
-    """Set state of specific pin on PCF8574"""
-    global pin_state
-    if state:
-        pin_state |= (1 << pin)  # Set pin high
-    else:
-        pin_state &= ~(1 << pin)  # Set pin low
-
-def write_i2c_pins():
-    """Write current pin state to PCF8574"""
-    bus.write_byte(I2C_ADDRESS, pin_state)
-
-def reset_i2c_pins():
-    """Reset all pins to high state"""
-    global pin_state
-    pin_state = 0xFF
-    write_i2c_pins()
 
 def get_band_for_value(value):
     """Determine which band the ADC value falls into"""
@@ -93,7 +121,7 @@ def main():
     print("Press Ctrl+C to exit\n")
     
     # Initialize I2C pins
-    reset_i2c_pins()
+    dj.reset_i2c_pins()
     
     try:
         while True:
@@ -107,21 +135,13 @@ def main():
             if new_range != current_range:
                 # Handle leaving previous band
                 if current_range is not None:
-                    print(f"Left {BANDS[current_range].name} (ADC: {pot_value})")
-                    # Turn off pin 0 when leaving any band
-                    set_i2c_pin(0, True)  # Set pin 0 high (off)
+                    dj.Stop(BANDS[current_range], pot_value)
                 
                 # Handle entering new band
                 if new_range is not None:
-                    print(f"Entered {BANDS[new_range].name} (ADC: {pot_value})")
-                    print(f"URL: {BANDS[new_range].url}")
-                    # Turn on pin 0 when entering any band
-                    set_i2c_pin(0, False)  # Set pin 0 low (on)
+                    dj.Play(BANDS[new_range], pot_value)
                 else:
                     print(f"Outside all bands (ADC: {pot_value})")
-                
-                # Write the new state to I2C device
-                write_i2c_pins()
                 
                 # Update current range
                 current_range = new_range
@@ -133,7 +153,7 @@ def main():
         print("\nProgram terminated by user.")
     finally:
         # Cleanup
-        reset_i2c_pins()
+        dj.reset_i2c_pins()
         GPIO.cleanup()
         spi.close()
         print("Cleanup completed.")
