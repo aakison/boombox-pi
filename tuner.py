@@ -131,6 +131,19 @@ def read_mcp3008(channel):
     data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
     return data
 
+def read_mcp3008_smooth(channel, samples=15):
+    """Read smoothed ADC value from MCP3008 averaged over multiple samples"""
+    if samples <= 0:
+        raise ValueError("Samples must be greater than 0")
+    
+    total = 0
+    for _ in range(samples):
+        total += read_mcp3008(channel)
+        # Small delay between samples to allow for settling
+        time.sleep(0.001)  # 1ms delay
+    
+    return total // samples  # Return integer average
+
 def get_band_for_value(value):
     """Determine which band the ADC value falls into"""
     for i, band in enumerate(BANDS):
@@ -152,8 +165,8 @@ def main():
     
     try:
         while True:
-            # Read potentiometer value
-            pot_value = read_mcp3008(0)
+            # Read smoothed potentiometer value
+            pot_value = read_mcp3008_smooth(0)
             
             # Determine current band
             new_range = get_band_for_value(pot_value)
