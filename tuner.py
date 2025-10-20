@@ -3,6 +3,21 @@ import smbus
 import time
 import RPi.GPIO as GPIO
 
+class Band:
+    """Represents a tuner band with ADC range and corresponding URL"""
+    def __init__(self, min_val, max_val, url, name=None):
+        self.min_val = min_val
+        self.max_val = max_val
+        self.url = url
+        self.name = name or f"{min_val}-{max_val}"
+    
+    def contains(self, value):
+        """Check if the given ADC value falls within this band's range"""
+        return self.min_val <= value <= self.max_val
+    
+    def __str__(self):
+        return f"Band {self.name}: {self.min_val}-{self.max_val} -> {self.url}"
+
 # MCP3008 ADC Configuration
 GPIO.setwarnings(False)
 GPIO.setmode(GPIO.BCM)
@@ -20,14 +35,11 @@ spi.no_cs = True  # Disable automatic CS control
 I2C_ADDRESS = 0x20
 bus = smbus.SMBus(1)
 
-# Define integer ranges for the potentiometer (0-1023 from 10-bit ADC)
-# You can modify these ranges as needed
-POT_RANGES = [
-    (0, 200),      # Range 1: 0-200
-    (305, 335),    # Range 2: 201-400
-    (360, 395),    # Range 3: 401-600
-    (430, 468),    # Range 4: 601-800
-    (801, 1023)    # Range 5: 801-1023
+# Define bands with their ranges and URLs
+BANDS = [
+    Band(305, 335, "http://abm21.com.au:8000/CONTAINER92", "Band 1"),
+    Band(360, 395, "http://abm21.com.au:8000/CONTAINER87", "Band 2"),
+    Band(430, 468, "http://abm21.com.au:8000/CONTAINER81", "Band 3")
 ]
 
 # Track current state
@@ -64,10 +76,10 @@ def reset_i2c_pins():
     pin_state = 0xFF
     write_i2c_pins()
 
-def get_range_for_value(value):
-    """Determine which range the ADC value falls into"""
-    for i, (min_val, max_val) in enumerate(POT_RANGES):
-        if min_val <= value <= max_val:
+def get_band_for_value(value):
+    """Determine which band the ADC value falls into"""
+    for i, band in enumerate(BANDS):
+        if band.contains(value):
             return i
     return None
 
@@ -75,9 +87,9 @@ def main():
     global current_range
     
     print("Starting Raspberry Pi Tuner...")
-    print("POT Ranges:")
-    for i, (min_val, max_val) in enumerate(POT_RANGES):
-        print(f"  Range {i+1}: {min_val}-{max_val}")
+    print("Bands:")
+    for i, band in enumerate(BANDS):
+        print(f"  {band}")
     print("Press Ctrl+C to exit\n")
     
     # Initialize I2C pins
@@ -88,24 +100,25 @@ def main():
             # Read potentiometer value
             pot_value = read_mcp3008(0)
             
-            # Determine current range
-            new_range = get_range_for_value(pot_value)
+            # Determine current band
+            new_range = get_band_for_value(pot_value)
             
-            # Check for range changes
+            # Check for band changes
             if new_range != current_range:
-                # Handle leaving previous range
+                # Handle leaving previous band
                 if current_range is not None:
-                    print(f"Left range {current_range + 1} (ADC: {pot_value})")
-                    # Turn off pin 0 when leaving any range
+                    print(f"Left {BANDS[current_range].name} (ADC: {pot_value})")
+                    # Turn off pin 0 when leaving any band
                     set_i2c_pin(0, True)  # Set pin 0 high (off)
                 
-                # Handle entering new range
+                # Handle entering new band
                 if new_range is not None:
-                    print(f"Entered range {new_range + 1} (ADC: {pot_value})")
-                    # Turn on pin 0 when entering any range
+                    print(f"Entered {BANDS[new_range].name} (ADC: {pot_value})")
+                    print(f"URL: {BANDS[new_range].url}")
+                    # Turn on pin 0 when entering any band
                     set_i2c_pin(0, False)  # Set pin 0 low (on)
                 else:
-                    print(f"Outside all ranges (ADC: {pot_value})")
+                    print(f"Outside all bands (ADC: {pot_value})")
                 
                 # Write the new state to I2C device
                 write_i2c_pins()
