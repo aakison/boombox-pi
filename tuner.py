@@ -4,6 +4,9 @@ import time
 import subprocess
 import RPi.GPIO as GPIO
 
+# Hardware pin constants
+MCP3008_CS_PIN = 7  # GPIO pin 7 used as Chip Select for MCP3008 ADC
+
 class Band:
     """Represents a tuner band with ADC range and corresponding URL"""
     def __init__(self, min_val, max_val, url, name=None):
@@ -18,6 +21,72 @@ class Band:
     
     def __str__(self):
         return f"Band {self.name}: {self.min_val}-{self.max_val} -> {self.url}"
+
+class Tuner:
+    """Singleton class to handle SPI interface to MCP3008 and band detection"""
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Tuner, cls).__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        if not Tuner._initialized:
+            # Initialize GPIO for MCP3008 chip select
+            GPIO.setwarnings(False)
+            GPIO.setmode(GPIO.BCM)
+            GPIO.setup(MCP3008_CS_PIN, GPIO.OUT)
+            GPIO.output(MCP3008_CS_PIN, GPIO.HIGH)  # Start with CS HIGH (inactive)
+            
+            # Initialize SPI for MCP3008
+            self.spi = spidev.SpiDev()
+            self.spi.open(0, 1)  # SPI bus 0, CE1 (GPIO7)
+            self.spi.max_speed_hz = 10000
+            self.spi.mode = 0
+            self.spi.no_cs = True  # Disable automatic CS control
+            Tuner._initialized = True
+    
+    def read_mcp3008(self, channel):
+        """Read ADC value from MCP3008"""
+        if channel < 0 or channel > 7:
+            raise ValueError("Channel must be 0-7")
+        
+        # Manually toggle chip select
+        GPIO.output(MCP3008_CS_PIN, GPIO.LOW)  # Activate MCP3008
+        adc = self.spi.xfer2([1, (8 + channel) << 4, 0])  # SPI transfer
+        GPIO.output(MCP3008_CS_PIN, GPIO.HIGH)  # Deactivate MCP3008
+        data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
+        return data
+    
+    def read_mcp3008_smooth(self, channel, samples=15):
+        """Read smoothed ADC value from MCP3008 averaged over multiple samples"""
+        if samples <= 0:
+            raise ValueError("Samples must be greater than 0")
+        
+        total = 0
+        for _ in range(samples):
+            total += self.read_mcp3008(channel)
+            # Small delay between samples to allow for settling
+            time.sleep(0.001)  # 1ms delay
+        
+        return total // samples  # Return integer average
+    
+    def get_band(self):
+        """Get the current band based on smoothed ADC reading"""
+        pot_value = self.read_mcp3008_smooth(0)
+        
+        for i, band in enumerate(BANDS):
+            if band.contains(pot_value):
+                return i, pot_value  # Return band index and ADC value
+        
+        return None, pot_value  # Return None if outside all bands
+    
+    def cleanup(self):
+        """Clean up SPI resources and GPIO"""
+        self.spi.close()
+        # Note: GPIO.cleanup() is called in main() to clean up all GPIO pins
 
 class Display:
     """Singleton class to control 6 LEDs on I2C interface"""
@@ -111,18 +180,7 @@ class DeeJay:
         # Turn off tuner LED when leaving any band
         self.display.ShowTunerLed(False)
 
-# MCP3008 ADC Configuration
-GPIO.setwarnings(False)
-GPIO.setmode(GPIO.BCM)
-GPIO.setup(7, GPIO.OUT)
-GPIO.output(7, GPIO.HIGH)  # Start with CS HIGH (inactive)
-
-# Initialize SPI for MCP3008
-spi = spidev.SpiDev()
-spi.open(0, 1)  # SPI bus 0, CE1 (GPIO7)
-spi.max_speed_hz = 10000
-spi.mode = 0
-spi.no_cs = True  # Disable automatic CS control
+# GPIO configuration is now handled by individual classes
 
 # Define bands with their ranges and URLs
 BANDS = [
@@ -132,46 +190,15 @@ BANDS = [
 ]
 
 # Initialize singleton instances
+tuner = Tuner()
 display = Display()
 dj = DeeJay()
 
 # Track current state
-current_range = None
-
-def read_mcp3008(channel):
-    """Read ADC value from MCP3008"""
-    if channel < 0 or channel > 7:
-        raise ValueError("Channel must be 0-7")
-    
-    # Manually toggle CS
-    GPIO.output(7, GPIO.LOW)  # Activate MCP3008
-    adc = spi.xfer2([1, (8 + channel) << 4, 0])  # SPI transfer
-    GPIO.output(7, GPIO.HIGH)  # Deactivate MCP3008
-    data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
-    return data
-
-def read_mcp3008_smooth(channel, samples=15):
-    """Read smoothed ADC value from MCP3008 averaged over multiple samples"""
-    if samples <= 0:
-        raise ValueError("Samples must be greater than 0")
-    
-    total = 0
-    for _ in range(samples):
-        total += read_mcp3008(channel)
-        # Small delay between samples to allow for settling
-        time.sleep(0.001)  # 1ms delay
-    
-    return total // samples  # Return integer average
-
-def get_band_for_value(value):
-    """Determine which band the ADC value falls into"""
-    for i, band in enumerate(BANDS):
-        if band.contains(value):
-            return i
-    return None
+current_band = None
 
 def main():
-    global current_range
+    global current_band
     
     print("Starting Raspberry Pi Tuner...")
     print("Bands:")
@@ -184,26 +211,23 @@ def main():
     
     try:
         while True:
-            # Read smoothed potentiometer value
-            pot_value = read_mcp3008_smooth(0)
-            
-            # Determine current band
-            new_range = get_band_for_value(pot_value)
+            # Get current band from tuner
+            new_band, adc_value = tuner.get_band()
             
             # Check for band changes
-            if new_range != current_range:
+            if new_band != current_band:
                 # Handle leaving previous band
-                if current_range is not None:
-                    dj.Stop(BANDS[current_range], pot_value)
+                if current_band is not None:
+                    dj.Stop(BANDS[current_band], adc_value)
                 
                 # Handle entering new band
-                if new_range is not None:
-                    dj.Play(BANDS[new_range], pot_value)
+                if new_band is not None:
+                    dj.Play(BANDS[new_band], adc_value)
                 else:
-                    print(f"Outside all bands (ADC: {pot_value})")
+                    print(f"Outside all bands (ADC: {adc_value})")
                 
-                # Update current range
-                current_range = new_range
+                # Update current band
+                current_band = new_band
             
             # Sleep for approximately 1/60th of a second (60 Hz)
             time.sleep(1/60)
@@ -213,8 +237,8 @@ def main():
     finally:
         # Cleanup
         display.reset_all_leds()
+        tuner.cleanup()
         GPIO.cleanup()
-        spi.close()
         print("Cleanup completed.")
 
 if __name__ == "__main__":
