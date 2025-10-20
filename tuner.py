@@ -1,6 +1,7 @@
 import spidev
 import smbus
 import time
+import subprocess
 import RPi.GPIO as GPIO
 
 class Band:
@@ -55,6 +56,22 @@ class DeeJay:
         """Called when entering a band"""
         print(f"Entered {band.name} (ADC: {adc_value})")
         print(f"URL: {band.url}")
+        
+        # Execute MPC commands to add and play the URL
+        try:
+            # Add the URL to MPC playlist
+            subprocess.run(["mpc", "add", band.url], check=True, capture_output=True, text=True)
+            print(f"Added {band.url} to playlist")
+            
+            # Start playing
+            subprocess.run(["mpc", "play"], check=True, capture_output=True, text=True)
+            print("Started playback")
+            
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing MPC command: {e}")
+        except FileNotFoundError:
+            print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
+        
         # Turn on pin 0 when entering any band
         self.set_i2c_pin(0, False)  # Set pin 0 low (on)
         self.write_i2c_pins()
@@ -62,6 +79,16 @@ class DeeJay:
     def Stop(self, band, adc_value):
         """Called when leaving a band"""
         print(f"Left {band.name} (ADC: {adc_value})")
+        
+        # Execute MPC command to clear playlist
+        try:
+            subprocess.run(["mpc", "clear"], check=True, capture_output=True, text=True)
+            print("Cleared playlist")
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing MPC clear command: {e}")
+        except FileNotFoundError:
+            print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
+        
         # Turn off pin 0 when leaving any band
         self.set_i2c_pin(0, True)  # Set pin 0 high (off)
         self.write_i2c_pins()
