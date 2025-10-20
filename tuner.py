@@ -6,6 +6,7 @@ import RPi.GPIO as GPIO
 
 # Hardware pin constants
 MCP3008_CS_PIN = 7  # GPIO pin 7 used as Chip Select for MCP3008 ADC
+TUNER_SWITCH_PIN = 17  # GPIO pin 17 used as on/off switch (HIGH=off, LOW=on)
 
 class Band:
     """Represents a tuner band with ADC range and corresponding URL"""
@@ -34,11 +35,12 @@ class Tuner:
     
     def __init__(self):
         if not Tuner._initialized:
-            # Initialize GPIO for MCP3008 chip select
+            # Initialize GPIO for MCP3008 chip select and tuner switch
             GPIO.setwarnings(False)
             GPIO.setmode(GPIO.BCM)
             GPIO.setup(MCP3008_CS_PIN, GPIO.OUT)
             GPIO.output(MCP3008_CS_PIN, GPIO.HIGH)  # Start with CS HIGH (inactive)
+            GPIO.setup(TUNER_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_OFF)  # Switch input, external 10K pull-down
             
             # Initialize SPI for MCP3008
             self.spi = spidev.SpiDev()
@@ -73,8 +75,17 @@ class Tuner:
         
         return total // samples  # Return integer average
     
+    def is_on(self):
+        """Check if the tuner is currently on by reading the switch pin"""
+        # LOW = on, HIGH = off
+        return GPIO.input(TUNER_SWITCH_PIN) == GPIO.LOW
+    
     def get_band(self):
         """Get the current band based on smoothed ADC reading"""
+        # If tuner is off, return None regardless of potentiometer position
+        if not self.is_on():
+            return None, 0  # Return None for band and 0 for ADC value
+        
         pot_value = self.read_mcp3008_smooth(0)
         
         for i, band in enumerate(BANDS):
