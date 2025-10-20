@@ -12,8 +12,9 @@ sudo apt-get install -y \
   mpc \
   speaker-test \
   git \
-  nano
-  
+  nano \
+  python3-rpi.gpio
+
 git clone https://github.com/aakison/boombox-pi.git
 
 # Copy configs
