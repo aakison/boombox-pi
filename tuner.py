@@ -24,9 +24,9 @@ bus = smbus.SMBus(1)
 # You can modify these ranges as needed
 POT_RANGES = [
     (0, 200),      # Range 1: 0-200
-    (201, 400),    # Range 2: 201-400
-    (401, 600),    # Range 3: 401-600
-    (601, 800),    # Range 4: 601-800
+    (305, 335),    # Range 2: 201-400
+    (360, 395),    # Range 3: 401-600
+    (430, 468),    # Range 4: 601-800
     (801, 1023)    # Range 5: 801-1023
 ]
 
