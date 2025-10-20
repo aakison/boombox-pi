@@ -19,8 +19,46 @@ class Band:
     def __str__(self):
         return f"Band {self.name}: {self.min_val}-{self.max_val} -> {self.url}"
 
+class Display:
+    """Singleton class to control 6 LEDs on I2C interface"""
+    _instance = None
+    _initialized = False
+    
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(Display, cls).__new__(cls)
+        return cls._instance
+    
+    def __init__(self):
+        if not Display._initialized:
+            self.pin_state = 0xFF  # Initial state: all pins high (LEDs off)
+            self.bus = smbus.SMBus(1)
+            self.i2c_address = 0x20
+            Display._initialized = True
+    
+    def set_i2c_pin(self, pin, state):
+        """Set state of specific pin on PCF8574"""
+        if state:
+            self.pin_state |= (1 << pin)  # Set pin high (LED off)
+        else:
+            self.pin_state &= ~(1 << pin)  # Set pin low (LED on)
+    
+    def write_i2c_pins(self):
+        """Write current pin state to PCF8574"""
+        self.bus.write_byte(self.i2c_address, self.pin_state)
+    
+    def reset_all_leds(self):
+        """Reset all LEDs to off state"""
+        self.pin_state = 0xFF
+        self.write_i2c_pins()
+    
+    def ShowTunerLed(self, on):
+        """Turn the tuner LED (pin 0) on or off"""
+        self.set_i2c_pin(0, not on)  # Invert because False = LED on
+        self.write_i2c_pins()
+
 class DeeJay:
-    """Singleton class to handle band transitions and I2C control"""
+    """Singleton class to handle band transitions"""
     _instance = None
     _initialized = False
     
@@ -31,26 +69,8 @@ class DeeJay:
     
     def __init__(self):
         if not DeeJay._initialized:
-            self.pin_state = 0xFF  # Initial state: all pins high
-            self.bus = smbus.SMBus(1)
-            self.i2c_address = 0x20
+            self.display = Display()
             DeeJay._initialized = True
-    
-    def set_i2c_pin(self, pin, state):
-        """Set state of specific pin on PCF8574"""
-        if state:
-            self.pin_state |= (1 << pin)  # Set pin high
-        else:
-            self.pin_state &= ~(1 << pin)  # Set pin low
-    
-    def write_i2c_pins(self):
-        """Write current pin state to PCF8574"""
-        self.bus.write_byte(self.i2c_address, self.pin_state)
-    
-    def reset_i2c_pins(self):
-        """Reset all pins to high state"""
-        self.pin_state = 0xFF
-        self.write_i2c_pins()
     
     def Play(self, band, adc_value):
         """Called when entering a band"""
@@ -72,9 +92,8 @@ class DeeJay:
         except FileNotFoundError:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
         
-        # Turn on pin 0 when entering any band
-        self.set_i2c_pin(0, False)  # Set pin 0 low (on)
-        self.write_i2c_pins()
+        # Turn on tuner LED when entering any band
+        self.display.ShowTunerLed(True)
     
     def Stop(self, band, adc_value):
         """Called when leaving a band"""
@@ -89,9 +108,8 @@ class DeeJay:
         except FileNotFoundError:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
         
-        # Turn off pin 0 when leaving any band
-        self.set_i2c_pin(0, True)  # Set pin 0 high (off)
-        self.write_i2c_pins()
+        # Turn off tuner LED when leaving any band
+        self.display.ShowTunerLed(False)
 
 # MCP3008 ADC Configuration
 GPIO.setwarnings(False)
@@ -113,7 +131,8 @@ BANDS = [
     Band(430, 468, "http://abm21.com.au:8000/CONTAINER81", "Band 3")
 ]
 
-# Initialize DeeJay singleton
+# Initialize singleton instances
+display = Display()
 dj = DeeJay()
 
 # Track current state
@@ -160,8 +179,8 @@ def main():
         print(f"  {band}")
     print("Press Ctrl+C to exit\n")
     
-    # Initialize I2C pins
-    dj.reset_i2c_pins()
+    # Initialize LEDs
+    display.reset_all_leds()
     
     try:
         while True:
@@ -193,7 +212,7 @@ def main():
         print("\nProgram terminated by user.")
     finally:
         # Cleanup
-        dj.reset_i2c_pins()
+        display.reset_all_leds()
         GPIO.cleanup()
         spi.close()
         print("Cleanup completed.")
