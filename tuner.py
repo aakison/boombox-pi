@@ -159,6 +159,8 @@ class DeeJay:
         
         # Execute MPC commands to add and play the URL
         try:
+            # Turn on tuner LED when entering any band
+            self.display.show_tuner_led(True)
             # Add the URL to MPC playlist
             subprocess.run(["mpc", "add", band.url], check=True, capture_output=True, text=True)
             print(f"Added {band.url} to playlist")
@@ -174,10 +176,8 @@ class DeeJay:
             print(f"Error executing MPC command: {e}")
         except FileNotFoundError:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
-        
-        # Turn on tuner LED when entering any band
-        self.display.show_tuner_led(True)
-    
+       
+   
     def stop(self, band, adc_value):
         """Called when leaving a band"""
         print(f"Left {band.name} (ADC: {adc_value})")
@@ -195,14 +195,12 @@ class DeeJay:
         self.display.show_tuner_led(False)
     
     def announce(self, text):
-        """Announce text using espeak and aplay"""
+        """Announce text using espeak and aplay (non-blocking)"""
         try:
-            # Use shell=True to handle the pipe properly
-            command = f'espeak "{text}" --stdout | aplay -D plug:espeak'
-            subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
-            print(f"Announced: {text}")
-        except subprocess.CalledProcessError as e:
-            print(f"Error executing espeak/aplay command: {e}")
+            # Use bash & to run in background, making it non-blocking
+            command = f'espeak "{text}" --stdout | aplay -D plug:espeak &'
+            subprocess.run(command, shell=True, check=False)  # Don't check return code for background process
+            print(f"Announcing: {text}")
         except FileNotFoundError:
             print("Error: espeak or aplay command not found. Please ensure they are installed.")
 
