@@ -214,8 +214,8 @@ BANDS = [
     Band(360, 395, "http://abm21.com.au:8000/CONTAINER87", "Radio Sydney, 80s Alternative"),
     Band(430, 468, "http://abm21.com.au:8000/CONTAINER90", "Radio Sydney, 90s Pop Charts"),
     Band(305, 335, "http://abm21.com.au:8000/CONTAINER91", "Radio Sydney, 90s Alternative"),
-    Band(483, 548, "https://stream.revma.ihrhls.com/zc397", "93.3 KTCL Denver")
-    Band(568, 624, "https://live-radio01.mediahubaustralia.com/2TJW/mp3/", "Triple J Sydney")
+    Band(483, 548, "https://stream.revma.ihrhls.com/zc397", "93.3 KTCL Denver"),
+    Band(568, 624, "https://live-radio01.mediahubaustralia.com/2TJW/mp3/", "Triple J Sydney"),
     Band(644, 700, "https://live.amperwave.net/direct/audacy-kroqfmaac-imc", "KROQ Los Angeles")
 ]
 
