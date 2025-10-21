@@ -21,7 +21,6 @@ git clone https://github.com/aakison/boombox-pi.git
 cp bootstrap-pi/mpd.conf /etc/mpd.conf
 cp bootstrap-pi/asound.conf /etc/asound.conf
 
-
 # Enable services
 sudo systemctl enable mpd
 sudo systemctl restart mpd
