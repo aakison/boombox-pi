@@ -134,6 +134,13 @@ class Display:
         self.pin_state = 0xFF
         self.write_i2c_pins()
     
+    def reset_cylon_leds(self):
+        """Reset only cylon LEDs (pins 1-5) while preserving pin 0 state"""
+        # Turn off pins 1, 2, 3, 4, 5 but preserve pin 0
+        for pin in [1, 2, 3, 4, 5]:
+            self.set_i2c_pin(pin, True)  # True = LED off
+        self.write_i2c_pins()
+    
     def show_tuner_led(self, on):
         """Turn the tuner LED (pin 0) on or off"""
         self.set_i2c_pin(0, not on)  # Invert because False = LED on
@@ -145,15 +152,15 @@ class Display:
         try:
             while True:
                 for pin in pins:
-                    # Reset all LEDs
-                    self.reset_all_leds()
+                    # Reset only cylon LEDs (preserve pin 0 tuner LED)
+                    self.reset_cylon_leds()
                     # Turn on current pin
                     self.set_i2c_pin(pin, False)  # False = LED on
                     self.write_i2c_pins()
                     await asyncio.sleep(0.15)
         except asyncio.CancelledError:
-            # Clean up when task is cancelled
-            self.reset_all_leds()
+            # Clean up when task is cancelled - only reset cylon LEDs
+            self.reset_cylon_leds()
             print("Stopped cylon LED pattern")
             raise
     
