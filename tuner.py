@@ -132,7 +132,7 @@ class Display:
         self.pin_state = 0xFF
         self.write_i2c_pins()
     
-    def ShowTunerLed(self, on):
+    def show_tuner_led(self, on):
         """Turn the tuner LED (pin 0) on or off"""
         self.set_i2c_pin(0, not on)  # Invert because False = LED on
         self.write_i2c_pins()
@@ -152,7 +152,7 @@ class DeeJay:
             self.display = Display()
             DeeJay._initialized = True
     
-    def Play(self, band, adc_value):
+    def play(self, band, adc_value):
         """Called when entering a band"""
         print(f"Entered {band.name} (ADC: {adc_value})")
         print(f"URL: {band.url}")
@@ -167,15 +167,18 @@ class DeeJay:
             subprocess.run(["mpc", "play"], check=True, capture_output=True, text=True)
             print("Started playback")
             
+            # Announce the band name only after successful playback start
+            self.announce(band.name)
+            
         except subprocess.CalledProcessError as e:
             print(f"Error executing MPC command: {e}")
         except FileNotFoundError:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
         
         # Turn on tuner LED when entering any band
-        self.display.ShowTunerLed(True)
+        self.display.show_tuner_led(True)
     
-    def Stop(self, band, adc_value):
+    def stop(self, band, adc_value):
         """Called when leaving a band"""
         print(f"Left {band.name} (ADC: {adc_value})")
         
@@ -189,15 +192,29 @@ class DeeJay:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
         
         # Turn off tuner LED when leaving any band
-        self.display.ShowTunerLed(False)
+        self.display.show_tuner_led(False)
+    
+    def announce(self, text):
+        """Announce text using espeak and aplay"""
+        try:
+            # Use shell=True to handle the pipe properly
+            command = f'espeak "{text}" --stdout | aplay -D plug:espeak'
+            subprocess.run(command, shell=True, check=True, capture_output=True, text=True)
+            print(f"Announced: {text}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error executing espeak/aplay command: {e}")
+        except FileNotFoundError:
+            print("Error: espeak or aplay command not found. Please ensure they are installed.")
 
 # GPIO configuration is now handled by individual classes
 
 # Define bands with their ranges and URLs
 BANDS = [
     Band(305, 335, "http://abm21.com.au:8000/CONTAINER92", "Band 1"),
-    Band(360, 395, "http://abm21.com.au:8000/CONTAINER87", "Band 2"),
-    Band(430, 468, "http://abm21.com.au:8000/CONTAINER81", "Band 3")
+    Band(360, 395, "http://abm21.com.au:8000/CONTAINER87", "Radio Sydney, 80s Alternative"),
+    Band(430, 468, "http://abm21.com.au:8000/CONTAINER81", "Band 3"),
+    Band(305, 335, "http://abm21.com.au:8000/CONTAINER91", "Radio Sydney, 90s Alternative"),
+    Band(483, 548, "https://stream.revma.ihrhls.com/zc397", "93.3 KTCL Denver")
 ]
 
 # Initialize singleton instances
@@ -229,11 +246,11 @@ def main():
             if new_band != current_band:
                 # Handle leaving previous band
                 if current_band is not None:
-                    dj.Stop(BANDS[current_band], adc_value)
+                    dj.stop(BANDS[current_band], adc_value)
                 
                 # Handle entering new band
                 if new_band is not None:
-                    dj.Play(BANDS[new_band], adc_value)
+                    dj.play(BANDS[new_band], adc_value)
                 else:
                     print(f"Outside all bands (ADC: {adc_value})")
                 
