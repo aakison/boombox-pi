@@ -2,6 +2,7 @@ import spidev
 import smbus
 import time
 import subprocess
+import asyncio
 import RPi.GPIO as GPIO
 
 # Hardware pin constants
@@ -62,7 +63,7 @@ class Tuner:
         data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
         return data
     
-    def read_mcp3008_smooth(self, channel, samples=15):
+    async def read_mcp3008_smooth(self, channel, samples=15):
         """Read smoothed ADC value from MCP3008 averaged over multiple samples"""
         if samples <= 0:
             raise ValueError("Samples must be greater than 0")
@@ -71,7 +72,7 @@ class Tuner:
         for _ in range(samples):
             total += self.read_mcp3008(channel)
             # Small delay between samples to allow for settling
-            time.sleep(0.001)  # 1ms delay
+            await asyncio.sleep(0.001)  # 1ms delay
         
         return total // samples  # Return integer average
     
@@ -80,13 +81,13 @@ class Tuner:
         # LOW = on, HIGH = off
         return GPIO.input(TUNER_SWITCH_PIN) == GPIO.LOW
     
-    def get_band(self):
+    async def get_band(self):
         """Get the current band based on smoothed ADC reading"""
         # If tuner is off, return None regardless of potentiometer position
         if not self.is_on():
             return None, 0  # Return None for band and 0 for ADC value
         
-        pot_value = self.read_mcp3008_smooth(0)
+        pot_value = await self.read_mcp3008_smooth(0)
         
         for i, band in enumerate(BANDS):
             if band.contains(pot_value):
@@ -114,6 +115,7 @@ class Display:
             self.pin_state = 0xFF  # Initial state: all pins high (LEDs off)
             self.bus = smbus.SMBus(1)
             self.i2c_address = 0x20
+            self.cylon_task = None
             Display._initialized = True
     
     def set_i2c_pin(self, pin, state):
@@ -136,6 +138,36 @@ class Display:
         """Turn the tuner LED (pin 0) on or off"""
         self.set_i2c_pin(0, not on)  # Invert because False = LED on
         self.write_i2c_pins()
+    
+    async def _cylon_pattern(self):
+        """Internal async cylon pattern - runs as independent task"""
+        pins = [1, 2, 5, 4, 3, 4, 5, 2]
+        try:
+            while True:
+                for pin in pins:
+                    # Reset all LEDs
+                    self.reset_all_leds()
+                    # Turn on current pin
+                    self.set_i2c_pin(pin, False)  # False = LED on
+                    self.write_i2c_pins()
+                    await asyncio.sleep(0.15)
+        except asyncio.CancelledError:
+            # Clean up when task is cancelled
+            self.reset_all_leds()
+            print("Stopped cylon LED pattern")
+            raise
+    
+    def start_meter_cylon(self):
+        """Start the cylon LED pattern as an async task"""
+        if self.cylon_task is None or self.cylon_task.done():
+            self.cylon_task = asyncio.create_task(self._cylon_pattern())
+            print("Started cylon LED pattern")
+    
+    def stop_meter_cylon(self):
+        """Stop the cylon LED pattern"""
+        if self.cylon_task and not self.cylon_task.done():
+            self.cylon_task.cancel()
+            self.cylon_task = None
 
 class DeeJay:
     """Singleton class to handle band transitions"""
@@ -227,7 +259,7 @@ dj = DeeJay()
 # Track current state
 current_band = None
 
-def main():
+async def main():
     global current_band
     
     print("Starting Raspberry Pi Tuner...")
@@ -239,10 +271,12 @@ def main():
     # Initialize LEDs
     display.reset_all_leds()
     
+    display.start_meter_cylon()
+
     try:
         while True:
             # Get current band from tuner
-            new_band, adc_value = tuner.get_band()
+            new_band, adc_value = await tuner.get_band()
             
             # Check for band changes
             if new_band != current_band:
@@ -260,7 +294,7 @@ def main():
                 current_band = new_band
             
             # Sleep for approximately 1/60th of a second (60 Hz)
-            time.sleep(1/60)
+            await asyncio.sleep(1/60)
             
     except KeyboardInterrupt:
         print("\nProgram terminated by user.")
@@ -272,4 +306,4 @@ def main():
         print("Cleanup completed.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
