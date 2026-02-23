@@ -29,7 +29,8 @@ sudo systemctl restart mpd
 curl -sL https://dtcooper.github.io/raspotify/install.sh | sh
 
 # Configure Raspotify
-sudo cp bootstrap-pi/raspotify.conf /etc/raspotify/conf
+#sudo cp bootstrap-pi/raspotify.conf /etc/raspotify/conf
+sudo cat raspotify.conf >> /etc/default/raspotify
 sudo systemctl restart raspotify
 
 # Mount shares
