@@ -25,6 +25,13 @@ cp bootstrap-pi/asound.conf /etc/asound.conf
 sudo systemctl enable mpd
 sudo systemctl restart mpd
 
+# Install Raspotify (Spotify Connect)
+curl -sL https://dtcooper.github.io/raspotify/install.sh | sh
+
+# Configure Raspotify
+sudo cp bootstrap-pi/raspotify.conf /etc/raspotify/conf
+sudo systemctl restart raspotify
+
 # Mount shares
 bash mounts/smb-mount.sh
 

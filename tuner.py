@@ -8,6 +8,7 @@ import RPi.GPIO as GPIO
 # Hardware pin constants
 MCP3008_CS_PIN = 7  # GPIO pin 7 used as Chip Select for MCP3008 ADC
 TUNER_SWITCH_PIN = 17  # GPIO pin 17 used as on/off switch (HIGH=off, LOW=on)
+SPOTIFY_SWITCH_PIN = 23  # GPIO pin 23 used to toggle Spotify Connect (HIGH=on, LOW=off)
 
 class Band:
     """Represents a tuner band with ADC range and corresponding URL"""
@@ -42,6 +43,7 @@ class Tuner:
             GPIO.setup(MCP3008_CS_PIN, GPIO.OUT)
             GPIO.output(MCP3008_CS_PIN, GPIO.HIGH)  # Start with CS HIGH (inactive)
             GPIO.setup(TUNER_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_OFF)  # Switch input, external 10K pull-down
+            GPIO.setup(SPOTIFY_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  # Spotify switch, pull-down
             
             # Initialize SPI for MCP3008
             self.spi = spidev.SpiDev()
@@ -265,6 +267,26 @@ dj = DeeJay()
 
 # Track current state
 current_band = None
+spotify_active = False
+
+def set_spotify(on):
+    """Start or stop the Raspotify service"""
+    global spotify_active
+    if on and not spotify_active:
+        try:
+            subprocess.run(["sudo", "systemctl", "start", "raspotify.service"], check=True, capture_output=True, text=True)
+            spotify_active = True
+            print("Spotify Connect started")
+            dj.announce("Spotify Connect")
+        except subprocess.CalledProcessError as e:
+            print(f"Error starting Raspotify: {e}")
+    elif not on and spotify_active:
+        try:
+            subprocess.run(["sudo", "systemctl", "stop", "raspotify.service"], check=True, capture_output=True, text=True)
+            spotify_active = False
+            print("Spotify Connect stopped")
+        except subprocess.CalledProcessError as e:
+            print(f"Error stopping Raspotify: {e}")
 
 async def main():
     global current_band
@@ -300,6 +322,10 @@ async def main():
                 # Update current band
                 current_band = new_band
             
+            # Check Spotify switch (pin 23)
+            spotify_pin = GPIO.input(SPOTIFY_SWITCH_PIN)
+            set_spotify(spotify_pin == GPIO.HIGH)
+
             # Sleep for approximately 1/60th of a second (60 Hz)
             await asyncio.sleep(1/60)
             
