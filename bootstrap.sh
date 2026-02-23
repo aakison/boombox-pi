@@ -18,8 +18,8 @@ sudo apt-get install -y \
 git clone https://github.com/aakison/boombox-pi.git
 
 # Copy configs
-cp bootstrap-pi/mpd.conf /etc/mpd.conf
-cp bootstrap-pi/asound.conf /etc/asound.conf
+sudo cp bootstrap-pi/mpd.conf /etc/mpd.conf
+sudo cp bootstrap-pi/asound.conf /etc/asound.conf
 
 # Enable services
 sudo systemctl enable mpd
@@ -30,7 +30,7 @@ curl -sL https://dtcooper.github.io/raspotify/install.sh | sh
 
 # Configure Raspotify
 #sudo cp bootstrap-pi/raspotify.conf /etc/raspotify/conf
-sudo cat raspotify.conf >> /etc/default/raspotify
+sudo sh -c 'cat raspotify.conf >> /etc/raspotify/conf'
 sudo systemctl restart raspotify
 
 # Mount shares
