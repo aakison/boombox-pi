@@ -10,7 +10,9 @@ spi.mode = 0
 def read_mcp3008(channel):
     if channel < 0 or channel > 7:
         raise ValueError("Channel must be 0-7")
-    adc = spi.xfer2([1, (8 + channel) << 4, 0])  # SPI transfer, hardware CS
+    cmd = [1, (8 + channel) << 4, 0]
+    spi.xfer2(cmd)  # priming transfer: discard result, absorbs first-clock-edge misalignment
+    adc = spi.xfer2(cmd)  # real transfer
     data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
     if data == 0:
         print(f"  [diag] channel {channel} raw bytes: {adc}")
