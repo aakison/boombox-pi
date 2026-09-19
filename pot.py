@@ -1,16 +1,26 @@
 import spidev
 import time
+import RPi.GPIO as GPIO
+
+CS_PIN = 5  # GPIO5, physical pin 29 - jumpered directly to MCP3008 CS, bypassing the on-board CE1 trace/R22
+
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(CS_PIN, GPIO.OUT, initial=GPIO.HIGH)
 
 # Initialize SPI
 spi = spidev.SpiDev()
-spi.open(0, 1)  # SPI bus 0, CE1 (GPIO7, physical pin 26) - confirmed by continuity to MCP3008 CS pin
-spi.max_speed_hz = 50000  # dropped from 1.35MHz: always-0 at high speed suggests RC filtering on R19-R22
+spi.open(0, 1)  # bus/device only selects CLK/MOSI/MISO wiring; CS handled manually below
+spi.max_speed_hz = 50000
 spi.mode = 0
+spi.no_cs = True  # kernel must not also drive CE1
 
 def read_mcp3008(channel):
     if channel < 0 or channel > 7:
         raise ValueError("Channel must be 0-7")
-    adc = spi.xfer2([1, (8 + channel) << 4, 0])  # hardware-driven CE0
+    GPIO.output(CS_PIN, GPIO.LOW)
+    adc = spi.xfer2([1, (8 + channel) << 4, 0])
+    GPIO.output(CS_PIN, GPIO.HIGH)
     data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
     return data
 
@@ -27,4 +37,5 @@ try:
 except KeyboardInterrupt:
     print("\nProgram terminated by user.")
 finally:
+    GPIO.cleanup()
     spi.close()  # Close SPI connection
