@@ -3,7 +3,7 @@ import time
 
 # Initialize SPI
 spi = spidev.SpiDev()
-spi.open(0, 1)  # SPI bus 0, CE1 (GPIO7) - CS handled by hardware
+spi.open(0, 0)  # SPI bus 0, CE0 (GPIO8) - matches schematic net SPI0_CE0 for this MCP3008
 spi.max_speed_hz = 1350000  # MCP3008 rated speed at 3.3V; 10kHz left long glitch windows
 spi.mode = 0
 
