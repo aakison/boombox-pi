@@ -4,7 +4,7 @@ import time
 # Initialize SPI
 spi = spidev.SpiDev()
 spi.open(0, 1)  # SPI bus 0, CE1 (GPIO7, physical pin 26) - confirmed by continuity to MCP3008 CS pin
-spi.max_speed_hz = 1350000  # MCP3008 rated speed at 3.3V; 10kHz left long glitch windows
+spi.max_speed_hz = 50000  # dropped from 1.35MHz: always-0 at high speed suggests RC filtering on R19-R22
 spi.mode = 0
 
 def read_mcp3008(channel):
