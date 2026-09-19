@@ -26,11 +26,14 @@ def read_mcp3008(channel):
     return data
 
 try:
-    print("Reading potentiometer on MCP3008 channel 0 (Ctrl+C to exit)...")
+    print("Reading potentiometers on MCP3008 channels 0 and 1 (Ctrl+C to exit)...")
     while True:
-        value = read_mcp3008(0)
-        voltage = value * 3.3 / 1023
-        print(f"ADC Value: {value}, Voltage: {voltage:.2f}V")
+        value0 = read_mcp3008(0)
+        voltage0 = value0 * 3.3 / 1023
+        value1 = read_mcp3008(1)
+        voltage1 = value1 * 3.3 / 1023
+        print(f"CH0 - ADC Value: {value0}, Voltage: {voltage0:.2f}V | "
+              f"CH1 - ADC Value: {value1}, Voltage: {voltage1:.2f}V")
         time.sleep(0.5)
 except KeyboardInterrupt:
     print("\nProgram terminated by user.")
