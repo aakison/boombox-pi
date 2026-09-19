@@ -4,7 +4,7 @@ import time
 # Initialize SPI
 spi = spidev.SpiDev()
 spi.open(0, 1)  # SPI bus 0, CE1 (GPIO7) - CS handled by hardware
-spi.max_speed_hz = 10000
+spi.max_speed_hz = 1350000  # MCP3008 rated speed at 3.3V; 10kHz left long glitch windows
 spi.mode = 0
 
 def read_mcp3008(channel):
@@ -12,6 +12,8 @@ def read_mcp3008(channel):
         raise ValueError("Channel must be 0-7")
     adc = spi.xfer2([1, (8 + channel) << 4, 0])  # SPI transfer, hardware CS
     data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
+    if data == 0:
+        print(f"  [diag] channel {channel} raw bytes: {adc}")
     return data
 
 try:
