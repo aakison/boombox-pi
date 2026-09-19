@@ -12,8 +12,6 @@ def read_mcp3008(channel):
         raise ValueError("Channel must be 0-7")
     adc = spi.xfer2([1, (8 + channel) << 4, 0])  # hardware-driven CE0
     data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
-    if data == 0:
-        print(f"  [diag] channel {channel} raw bytes: {adc}")
     return data
 
 try:
