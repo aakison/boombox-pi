@@ -249,9 +249,9 @@ BANDS = [
     Band(360, 395, "http://abm21.com.au:8000/CONTAINER87", "Radio Sydney, 80s Alternative"),
     Band(430, 468, "http://abm21.com.au:8000/CONTAINER90", "Radio Sydney, 90s Pop Charts"),
     Band(483, 548, "http://abm21.com.au:8000/CONTAINER91", "Radio Sydney, 90s Alternative"),
-    Band(568, 624, "https://stream.revma.ihrhls.com/zc397", "93.3 KTCL Denver"),
+    Band(568, 624, "https://stream.revma.ihrhls.com/zc397", "93.3 K.T.C.L. Denver (K-Tickle)"),
     Band(644, 700, "https://live-radio01.mediahubaustralia.com/2TJW/mp3/", "Triple J Sydney"),
-    Band(720, 776, "https://live.amperwave.net/direct/audacy-kroqfmaac-imc", "K R O Q Los Angeles")
+    Band(720, 776, "https://live.amperwave.net/direct/audacy-kroqfmaac-imc", "K.R.O.Q. Los Angeles (K-Rock)")
 ]
 
 # Initialize singleton instances
@@ -296,24 +296,13 @@ async def main():
     
     display.start_meter_cylon()
 
-    loop_count = 0
     try:
         while True:
             # Get current band from tuner
             new_band, adc_value = await tuner.get_band()
             
-            # Periodic raw status so a stuck switch/pot vs. a broken DJ can be told apart
-            loop_count += 1
-            if loop_count % 60 == 0:  # roughly once a second at 60Hz
-                raw_switch = GPIO.input(TUNER_SWITCH_PIN)
-                raw_adc = tuner.read_mcp3008(0)  # bypasses is_on() gate entirely
-                print(f"[debug] raw_switch_pin={raw_switch} switch_on={tuner.is_on()} "
-                      f"raw_adc(ch0)={raw_adc} gated_adc_value={adc_value} "
-                      f"new_band={new_band} current_band={current_band}")
-            
             # Check for band changes
             if new_band != current_band:
-                print(f"[debug] band change detected: current_band={current_band} -> new_band={new_band} (ADC: {adc_value})")
                 # Handle leaving previous band
                 if current_band is not None:
                     dj.stop(BANDS[current_band], adc_value)
