@@ -6,7 +6,6 @@ import asyncio
 import RPi.GPIO as GPIO
 
 # Hardware pin constants
-MCP3008_CS_PIN = 7  # GPIO pin 7 used as Chip Select for MCP3008 ADC
 TUNER_SWITCH_PIN = 17  # GPIO pin 17 used as on/off switch (HIGH=off, LOW=on)
 SPOTIFY_SWITCH_PIN = 23  # GPIO pin 23 used to toggle Spotify Connect (HIGH=on, LOW=off)
 
@@ -37,20 +36,17 @@ class Tuner:
     
     def __init__(self):
         if not Tuner._initialized:
-            # Initialize GPIO for MCP3008 chip select and tuner switch
+            # Initialize GPIO for tuner switch
             GPIO.setwarnings(False)
             GPIO.setmode(GPIO.BCM)
-            GPIO.setup(MCP3008_CS_PIN, GPIO.OUT)
-            GPIO.output(MCP3008_CS_PIN, GPIO.HIGH)  # Start with CS HIGH (inactive)
             GPIO.setup(TUNER_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_OFF)  # Switch input, external 10K pull-down
             GPIO.setup(SPOTIFY_SWITCH_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)  # Spotify switch, pull-down
             
-            # Initialize SPI for MCP3008
+            # Initialize SPI for MCP3008, using hardware chip select (CE1 on GPIO7)
             self.spi = spidev.SpiDev()
             self.spi.open(0, 1)  # SPI bus 0, CE1 (GPIO7)
-            self.spi.max_speed_hz = 10000
+            self.spi.max_speed_hz = 1350000  # MCP3008 rated speed at 3.3V
             self.spi.mode = 0
-            self.spi.no_cs = True  # Disable automatic CS control
             Tuner._initialized = True
     
     def read_mcp3008(self, channel):
@@ -58,10 +54,7 @@ class Tuner:
         if channel < 0 or channel > 7:
             raise ValueError("Channel must be 0-7")
         
-        # Manually toggle chip select
-        GPIO.output(MCP3008_CS_PIN, GPIO.LOW)  # Activate MCP3008
         adc = self.spi.xfer2([1, (8 + channel) << 4, 0])  # SPI transfer
-        GPIO.output(MCP3008_CS_PIN, GPIO.HIGH)  # Deactivate MCP3008
         data = ((adc[1] & 3) << 8) + adc[2]  # Combine 10-bit result
         return data
     
