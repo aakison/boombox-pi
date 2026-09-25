@@ -305,7 +305,10 @@ async def main():
             # Periodic raw status so a stuck switch/pot vs. a broken DJ can be told apart
             loop_count += 1
             if loop_count % 60 == 0:  # roughly once a second at 60Hz
-                print(f"[debug] switch_on={tuner.is_on()} adc_value={adc_value} "
+                raw_switch = GPIO.input(TUNER_SWITCH_PIN)
+                raw_adc = tuner.read_mcp3008(0)  # bypasses is_on() gate entirely
+                print(f"[debug] raw_switch_pin={raw_switch} switch_on={tuner.is_on()} "
+                      f"raw_adc(ch0)={raw_adc} gated_adc_value={adc_value} "
                       f"new_band={new_band} current_band={current_band}")
             
             # Check for band changes
