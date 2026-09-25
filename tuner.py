@@ -90,6 +90,7 @@ class Tuner:
         
         return None, pot_value  # Return None if outside all bands
     
+    
     def cleanup(self):
         """Clean up SPI resources and GPIO"""
         self.spi.close()
@@ -196,18 +197,18 @@ class DeeJay:
             # Turn on tuner LED when entering any band
             self.display.show_tuner_led(True)
             # Add the URL to MPC playlist
-            subprocess.run(["mpc", "add", band.url], check=True, capture_output=True, text=True)
-            print(f"Added {band.url} to playlist")
+            add_result = subprocess.run(["mpc", "add", band.url], check=True, capture_output=True, text=True)
+            print(f"Added {band.url} to playlist: {add_result.stdout.strip() or '(no output)'}")
             
             # Start playing
-            subprocess.run(["mpc", "play"], check=True, capture_output=True, text=True)
-            print("Started playback")
+            play_result = subprocess.run(["mpc", "play"], check=True, capture_output=True, text=True)
+            print(f"Started playback: {play_result.stdout.strip() or '(no output)'}")
             
             # Announce the band name only after successful playback start
             self.announce(band.name)
             
         except subprocess.CalledProcessError as e:
-            print(f"Error executing MPC command: {e}")
+            print(f"Error executing MPC command (exit {e.returncode}): stdout={e.stdout!r} stderr={e.stderr!r}")
         except FileNotFoundError:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
        
@@ -218,10 +219,10 @@ class DeeJay:
         
         # Execute MPC command to clear playlist
         try:
-            subprocess.run(["mpc", "clear"], check=True, capture_output=True, text=True)
-            print("Cleared playlist")
+            clear_result = subprocess.run(["mpc", "clear"], check=True, capture_output=True, text=True)
+            print(f"Cleared playlist: {clear_result.stdout.strip() or '(no output)'}")
         except subprocess.CalledProcessError as e:
-            print(f"Error executing MPC clear command: {e}")
+            print(f"Error executing MPC clear command (exit {e.returncode}): stdout={e.stdout!r} stderr={e.stderr!r}")
         except FileNotFoundError:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
         
@@ -233,8 +234,8 @@ class DeeJay:
         try:
             # Use bash & to run in background, making it non-blocking
             command = f'espeak "{text}" --stdout | aplay -D plug:espeak &'
-            subprocess.run(command, shell=True, check=False)  # Don't check return code for background process
-            print(f"Announcing: {text}")
+            result = subprocess.run(command, shell=True, check=False, capture_output=True, text=True)  # Don't check return code for background process
+            print(f"Announcing: {text} (exit {result.returncode}, stderr={result.stderr.strip() or '(none)'})")
         except FileNotFoundError:
             print("Error: espeak or aplay command not found. Please ensure they are installed.")
 
@@ -295,13 +296,21 @@ async def main():
     
     display.start_meter_cylon()
 
+    loop_count = 0
     try:
         while True:
             # Get current band from tuner
             new_band, adc_value = await tuner.get_band()
             
+            # Periodic raw status so a stuck switch/pot vs. a broken DJ can be told apart
+            loop_count += 1
+            if loop_count % 60 == 0:  # roughly once a second at 60Hz
+                print(f"[debug] switch_on={tuner.is_on()} adc_value={adc_value} "
+                      f"new_band={new_band} current_band={current_band}")
+            
             # Check for band changes
             if new_band != current_band:
+                print(f"[debug] band change detected: current_band={current_band} -> new_band={new_band} (ADC: {adc_value})")
                 # Handle leaving previous band
                 if current_band is not None:
                     dj.stop(BANDS[current_band], adc_value)
