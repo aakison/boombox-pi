@@ -7,11 +7,16 @@ from collections import deque
 from boombox_function import IBoomboxFunction
 from announcer import Announcer
 from display import Display
+from input import Input
 
 MUSIC_DIR = "/srv/music"
 STEREO_FLASH_SPEED_MS = 250  # Flash speed while scanning the MP3 library
 HISTORY_SIZE = 20  # Number of recently played tracks to avoid repeating
 POLL_INTERVAL_S = 1  # How often to check whether the current track has finished
+
+FINE_TUNE_POLL_INTERVAL_S = 1 / 60  # Poll rate for the fine-tune dial (60 Hz)
+FINE_TUNE_THRESHOLD = 20  # ADC delta from baseline that counts as a deliberate dial move
+FINE_TUNE_SETTLE_DELAY_S = 0.25  # Let the dial stop moving before reading its resting value
 
 class Mp3Player(IBoomboxFunction):
     """Scans /srv/music for MP3s and plays them back-to-back in random order via MPC"""
@@ -19,10 +24,15 @@ class Mp3Player(IBoomboxFunction):
     def __init__(self):
         self.announcer = Announcer()
         self.display = Display()
+        self.input = Input()
         self._running = False
         self._tracks = []
         self._history = deque(maxlen=HISTORY_SIZE)
         self._playback_task = None
+        self._fine_tune_task = None
+        self._current_track = None
+        self._restart_requested = False
+        self._track_control_event = asyncio.Event()
 
     def start(self):
         """Start scanning the MP3 library and begin random playback"""
@@ -30,6 +40,7 @@ class Mp3Player(IBoomboxFunction):
             return
         self._running = True
         self._playback_task = asyncio.create_task(self._run())
+        self._fine_tune_task = asyncio.create_task(self._watch_fine_tune())
 
     def stop(self):
         """Stop playback and turn off the display"""
@@ -39,6 +50,9 @@ class Mp3Player(IBoomboxFunction):
         if self._playback_task and not self._playback_task.done():
             self._playback_task.cancel()
         self._playback_task = None
+        if self._fine_tune_task and not self._fine_tune_task.done():
+            self._fine_tune_task.cancel()
+        self._fine_tune_task = None
         try:
             subprocess.run(["mpc", "stop"], check=True, capture_output=True, text=True)
             subprocess.run(["mpc", "clear"], check=True, capture_output=True, text=True)
@@ -73,7 +87,13 @@ class Mp3Player(IBoomboxFunction):
 
         try:
             while self._running:
-                track = self._choose_track()
+                if self._restart_requested and self._current_track is not None:
+                    track = self._current_track
+                else:
+                    track = self._choose_track()
+                    self._current_track = track
+                self._restart_requested = False
+                self._track_control_event.clear()
                 if self._play_track(track):
                     await self._wait_for_track_to_finish()
                 else:
@@ -127,11 +147,54 @@ class Mp3Player(IBoomboxFunction):
             return False
 
     async def _wait_for_track_to_finish(self):
-        """Poll MPC status until the current track is no longer playing"""
+        """Poll MPC status until the current track finishes, or a next/restart request interrupts it"""
         while self._running:
-            await asyncio.sleep(POLL_INTERVAL_S)
+            try:
+                await asyncio.wait_for(self._track_control_event.wait(), timeout=POLL_INTERVAL_S)
+            except asyncio.TimeoutError:
+                pass
+            if self._track_control_event.is_set():
+                return
             if not self._is_playing():
                 return
+
+    async def _watch_fine_tune(self):
+        """Watch the fine-tune dial and request a track skip/restart on deliberate moves"""
+        baseline = self.input.get_FineTune()
+        skip_settle_delay = False
+        try:
+            while self._running:
+                await asyncio.sleep(FINE_TUNE_POLL_INTERVAL_S)
+                value = self.input.get_FineTune()
+                delta = value - baseline
+
+                if delta >= FINE_TUNE_THRESHOLD:
+                    if not skip_settle_delay:
+                        await asyncio.sleep(FINE_TUNE_SETTLE_DELAY_S)
+                        value = self.input.get_FineTune()
+                    skip_settle_delay = False
+                    baseline = value
+                    self._request_next_track()
+                elif delta <= -FINE_TUNE_THRESHOLD:
+                    await asyncio.sleep(FINE_TUNE_SETTLE_DELAY_S)
+                    value = self.input.get_FineTune()
+                    baseline = value
+                    # Dial may be pushed against its mechanical stop - the forward move that
+                    # follows is the user retrying, not a new deliberate gesture, so don't wait for it
+                    skip_settle_delay = True
+                    self._request_restart_track()
+        except asyncio.CancelledError:
+            raise
+
+    def _request_next_track(self):
+        """Interrupt playback so the player immediately moves on to a new random track"""
+        self._restart_requested = False
+        self._track_control_event.set()
+
+    def _request_restart_track(self):
+        """Interrupt playback so the player immediately replays the current track from the start"""
+        self._restart_requested = True
+        self._track_control_event.set()
 
     def _is_playing(self):
         """Return True if MPC reports the player is currently in the [playing] state"""
