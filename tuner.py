@@ -5,6 +5,7 @@ import asyncio
 import RPi.GPIO as GPIO
 
 from display import Display
+from announcer import Announcer
 
 # Hardware pin constants
 TUNER_SWITCH_PIN = 17  # GPIO pin 17 used as on/off switch (HIGH=off, LOW=on)
@@ -110,6 +111,7 @@ class DeeJay:
     def __init__(self):
         if not DeeJay._initialized:
             self.display = Display()
+            self.announcer = Announcer()
             DeeJay._initialized = True
     
     def play(self, band, adc_value):
@@ -130,7 +132,7 @@ class DeeJay:
             print(f"Started playback: {play_result.stdout.strip() or '(no output)'}")
             
             # Announce the band name only after successful playback start
-            self.announce(band.name)
+            self.announcer.announce(band.name)
             
         except subprocess.CalledProcessError as e:
             print(f"Error executing MPC command (exit {e.returncode}): stdout={e.stdout!r} stderr={e.stderr!r}")
@@ -153,16 +155,6 @@ class DeeJay:
         
         # Turn off stereo LED when leaving any band
         self.display.set_stereo(False)
-    
-    def announce(self, text):
-        """Announce text using espeak and aplay (non-blocking)"""
-        try:
-            # Use bash & to run in background, making it non-blocking
-            command = f'espeak "{text}" --stdout | aplay -D plug:espeak &'
-            result = subprocess.run(command, shell=True, check=False, capture_output=True, text=True)  # Don't check return code for background process
-            print(f"Announcing: {text} (exit {result.returncode}, stderr={result.stderr.strip() or '(none)'})")
-        except FileNotFoundError:
-            print("Error: espeak or aplay command not found. Please ensure they are installed.")
 
 # GPIO configuration is now handled by individual classes
 
@@ -196,7 +188,7 @@ def set_spotify(on):
             subprocess.run(["sudo", "systemctl", "start", "raspotify.service"], check=True, capture_output=True, text=True)
             spotify_active = True
             print("Spotify Connect started")
-            dj.announce("Spotify Connect")
+            dj.announcer.announce("Spotify Connect")
         except subprocess.CalledProcessError as e:
             print(f"Error starting Raspotify: {e}")
     elif not on and spotify_active:
