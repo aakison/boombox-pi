@@ -6,6 +6,7 @@ import RPi.GPIO as GPIO
 
 from display import Display
 from announcer import Announcer
+from spotify import Spotify
 
 # Hardware pin constants
 TUNER_SWITCH_PIN = 17  # GPIO pin 17 used as on/off switch (HIGH=off, LOW=on)
@@ -175,29 +176,10 @@ BANDS = [
 tuner = Tuner()
 display = Display()
 dj = DeeJay()
+spotify = Spotify()
 
 # Track current state
 current_band = None
-spotify_active = False
-
-def set_spotify(on):
-    """Start or stop the Raspotify service"""
-    global spotify_active
-    if on and not spotify_active:
-        try:
-            subprocess.run(["sudo", "systemctl", "start", "raspotify.service"], check=True, capture_output=True, text=True)
-            spotify_active = True
-            print("Spotify Connect started")
-            dj.announcer.announce("Spotify Connect")
-        except subprocess.CalledProcessError as e:
-            print(f"Error starting Raspotify: {e}")
-    elif not on and spotify_active:
-        try:
-            subprocess.run(["sudo", "systemctl", "stop", "raspotify.service"], check=True, capture_output=True, text=True)
-            spotify_active = False
-            print("Spotify Connect stopped")
-        except subprocess.CalledProcessError as e:
-            print(f"Error stopping Raspotify: {e}")
 
 async def main():
     global current_band
@@ -235,7 +217,10 @@ async def main():
             
             # Check Spotify switch (pin 23)
             spotify_pin = GPIO.input(SPOTIFY_SWITCH_PIN)
-            set_spotify(spotify_pin == GPIO.HIGH)
+            if spotify_pin == GPIO.HIGH:
+                spotify.start()
+            else:
+                spotify.stop()
 
             # Sleep for approximately 1/60th of a second (60 Hz)
             await asyncio.sleep(1/60)
