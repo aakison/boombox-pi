@@ -6,7 +6,7 @@ from announcer import Announcer
 from display import Display
 from input import Input
 
-TUNER_SAMPLES = 15  # Number of ADC samples averaged per tuner reading
+TUNER_SAMPLES = 4  # Number of ADC samples averaged per tuner reading
 TUNER_POLL_INTERVAL_S = 1 / 60  # 60 Hz poll rate for the tuner dial
 
 class Band:
