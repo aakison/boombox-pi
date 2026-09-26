@@ -58,6 +58,7 @@ class Mp3Player(IBoomboxFunction):
     async def _run(self):
         """Load the library (flashing the display), then play random tracks until stopped"""
         self.display.start_stereo_animation(STEREO_FLASH_SPEED_MS)
+        await asyncio.to_thread(self._update_mpd_database)
         self._tracks = await asyncio.to_thread(self._scan_library)
         self.display.stop_stereo_animation()
 
@@ -79,6 +80,15 @@ class Mp3Player(IBoomboxFunction):
                     await asyncio.sleep(POLL_INTERVAL_S)
         except asyncio.CancelledError:
             raise
+
+    def _update_mpd_database(self):
+        """Force MPD to rescan MUSIC_DIR so mpc add can find files that aren't already in its database"""
+        try:
+            subprocess.run(["mpc", "update", "--wait"], check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as e:
+            print(f"Error updating MPD database (exit {e.returncode}): stdout={e.stdout!r} stderr={e.stderr!r}")
+        except FileNotFoundError:
+            print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
 
     def _scan_library(self):
         """Recursively find all MP3 files under MUSIC_DIR, returning paths relative to it"""
