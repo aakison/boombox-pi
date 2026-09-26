@@ -14,7 +14,8 @@ sudo apt-get install -y \
   speaker-test \
   git \
   nano \
-  python3-rpi.gpio
+  python3-rpi.gpio \
+  shairport-sync
 
 # Copy a config file only when its content changed, restarting the given
 # service (if any) so unrelated services aren't bounced on every run.
@@ -28,8 +29,12 @@ install_config() {
 
 install_config "$SCRIPT_DIR/mpd.conf" /etc/mpd.conf mpd
 install_config "$SCRIPT_DIR/asound.conf" /etc/asound.conf mpd
+# AirPlay discovery name. Installed after asound.conf so a config-triggered
+# restart uses the shared mixer. Unchanged files do not restart the service.
+install_config "$SCRIPT_DIR/shairport-sync.conf" /etc/shairport-sync.conf shairport-sync
 
 sudo systemctl enable mpd
+sudo systemctl enable shairport-sync
 
 # Install Raspotify (Spotify Connect) only if it isn't already installed
 if ! dpkg -s raspotify &>/dev/null; then
