@@ -33,7 +33,7 @@ BANDS = [
     Band(430, 468, "http://abm21.com.au:8000/CONTAINER90", "Radio Sydney, 90s Pop Charts"),
     Band(483, 548, "http://abm21.com.au:8000/CONTAINER91", "Radio Sydney, 90s Alternative"),
     Band(568, 624, "https://stream.revma.ihrhls.com/zc397", "93.3 K.T.C.L. Denver (K-Tickle)"),
-    Band(644, 700, "https://live-radio01.mediahubaustralia.com/2TJW/mp3/", "Triple J Sydney"),
+    Band(644, 700, "https://mediaserviceslive.akamaized.net/hls/live/2038315/doublejnsw/index.m3u8", "Double J"),
     Band(720, 776, "https://live.amperwave.net/direct/audacy-kroqfmaac-imc", "K.R.O.Q. Los Angeles (K-Rock)")
 ]
 
