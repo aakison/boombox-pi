@@ -62,7 +62,7 @@ class Input:
 
     def get_Function(self):
         """Return the current Function switch position"""
-        return Function.RADIO if GPIO.input(FUNCTION_PIN) == GPIO.HIGH else Function.TAPE
+        return Function.TAPE if GPIO.input(FUNCTION_PIN) == GPIO.HIGH else Function.RADIO
 
     def get_Band(self):
         """Return the current Band switch position, or None if no position is active"""
