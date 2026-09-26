@@ -17,6 +17,7 @@ POLL_INTERVAL_S = 1  # How often to check whether the current track has finished
 FINE_TUNE_POLL_INTERVAL_S = 1 / 60  # Poll rate for the fine-tune dial (60 Hz)
 FINE_TUNE_THRESHOLD = 20  # ADC delta from baseline that counts as a deliberate dial move
 FINE_TUNE_SETTLE_DELAY_S = 0.25  # Let the dial stop moving before reading its resting value
+TUNER_SAMPLES = 4  # Number of ADC samples averaged per fine-tune reading
 
 class Mp3Player(IBoomboxFunction):
     """Scans /srv/music for MP3s and plays them back-to-back in random order via MPC"""
@@ -160,24 +161,24 @@ class Mp3Player(IBoomboxFunction):
 
     async def _watch_fine_tune(self):
         """Watch the fine-tune dial and request a track skip/restart on deliberate moves"""
-        baseline = self.input.get_FineTune()
+        baseline = await self._read_fine_tune_smooth()
         skip_settle_delay = False
         try:
             while self._running:
                 await asyncio.sleep(FINE_TUNE_POLL_INTERVAL_S)
-                value = self.input.get_FineTune()
+                value = await self._read_fine_tune_smooth()
                 delta = value - baseline
 
                 if delta >= FINE_TUNE_THRESHOLD:
                     if not skip_settle_delay:
                         await asyncio.sleep(FINE_TUNE_SETTLE_DELAY_S)
-                        value = self.input.get_FineTune()
+                        value = await self._read_fine_tune_smooth()
                     skip_settle_delay = False
                     baseline = value
                     self._request_next_track()
                 elif delta <= -FINE_TUNE_THRESHOLD:
                     await asyncio.sleep(FINE_TUNE_SETTLE_DELAY_S)
-                    value = self.input.get_FineTune()
+                    value = await self._read_fine_tune_smooth()
                     baseline = value
                     # Dial may be pushed against its mechanical stop - the forward move that
                     # follows is the user retrying, not a new deliberate gesture, so don't wait for it
@@ -185,6 +186,14 @@ class Mp3Player(IBoomboxFunction):
                     self._request_restart_track()
         except asyncio.CancelledError:
             raise
+
+    async def _read_fine_tune_smooth(self, samples=TUNER_SAMPLES):
+        """Read the fine-tune dial averaged over multiple samples to reduce noise"""
+        total = 0
+        for _ in range(samples):
+            total += self.input.get_FineTune()
+            await asyncio.sleep(0.001)
+        return total // samples
 
     def _request_next_track(self):
         """Interrupt playback so the player immediately moves on to a new random track"""
