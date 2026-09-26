@@ -11,7 +11,6 @@ sudo apt-get install -y \
   alsa-utils \
   mpd \
   mpc \
-  speaker-test \
   git \
   nano \
   python3-rpi.gpio \
