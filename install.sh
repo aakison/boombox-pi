@@ -48,9 +48,6 @@ install_config "$SCRIPT_DIR/raspotify.conf" /etc/raspotify/conf raspotify
 # Share /srv/music over SMB so other devices can drop music onto the Pi
 bash "$SCRIPT_DIR/smb-share.sh"
 
-# Mount shares
-bash "$SCRIPT_DIR/smb-mount.sh"
-
 # Setup Bluetooth
 bash "$SCRIPT_DIR/bt-setup.sh"
 
