@@ -1,15 +1,14 @@
 import asyncio
-import re
+import glob
 import subprocess
 
 from boombox_function import IBoomboxFunction
 from announcer import Announcer
 from display import Display
 
-MPRIS_BUS_NAME = "org.mpris.MediaPlayer2.ShairportSync"
-MPRIS_OBJECT_PATH = "/org/mpris/MediaPlayer2"
+ALSA_PCM_STATUS_GLOB = "/proc/asound/card*/pcm*p/sub*/status"
 STEREO_FLASH_SPEED_MS = 500  # Flash speed while waiting for a device to play audio
-_UNSET = object()  # Sentinel distinct from any real PlaybackStatus (including None), forces the first poll to always act
+_UNSET = object()  # Sentinel distinct from any real playback status (including None), forces the first poll to always act
 
 class AirPlay(IBoomboxFunction):
     """Handles starting/stopping the Shairport Sync (AirPlay) service"""
@@ -52,13 +51,13 @@ class AirPlay(IBoomboxFunction):
         return self._running
 
     def _start_status_polling(self):
-        """Start polling MPRIS PlaybackStatus as an independent async task"""
+        """Start polling ALSA PCM playback status as an independent async task"""
         if self._poll_task is None or self._poll_task.done():
             self._last_status = _UNSET
             self._poll_task = asyncio.create_task(self._poll_playback_status())
 
     def _stop_status_polling(self):
-        """Stop polling MPRIS PlaybackStatus and clear the stereo indicator"""
+        """Stop polling ALSA PCM playback status and clear the stereo indicator"""
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
         self._poll_task = None
@@ -66,25 +65,24 @@ class AirPlay(IBoomboxFunction):
         self.display.set_stereo(False)
 
     def _get_playback_status(self):
-        """Query MPRIS for the current PlaybackStatus, or None if unavailable (e.g. no client connected)"""
-        try:
-            result = subprocess.run(
-                ["busctl", "get-property", MPRIS_BUS_NAME, MPRIS_OBJECT_PATH,
-                 "org.mpris.MediaPlayer2.Player", "PlaybackStatus"],
-                check=True, capture_output=True, text=True,
-            )
-            match = re.search(r'"(\w+)"', result.stdout)
-            return match.group(1) if match else None
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return None
+        """Check ALSA PCM playback substreams for one actively RUNNING, or None if all are closed/idle"""
+        for path in glob.glob(ALSA_PCM_STATUS_GLOB):
+            try:
+                with open(path) as f:
+                    content = f.read()
+            except OSError:
+                continue
+            if content.startswith("state: RUNNING"):
+                return "RUNNING"
+        return None
 
     async def _poll_playback_status(self):
-        """Poll MPRIS PlaybackStatus once per second, flashing the stereo LED unless actively Playing"""
+        """Poll ALSA PCM status once per second, flashing the stereo LED unless a stream is actively RUNNING"""
         try:
             while True:
                 status = self._get_playback_status()
                 if status != self._last_status:
-                    if status == "Playing":
+                    if status == "RUNNING":
                         self.display.stop_stereo_animation()
                         self.display.set_stereo(True)
                     else:
