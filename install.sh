@@ -28,6 +28,18 @@ install_config() {
 
 install_config "$SCRIPT_DIR/mpd.conf" /etc/mpd.conf mpd
 install_config "$SCRIPT_DIR/asound.conf" /etc/asound.conf mpd
+
+# Named pipe for Shairport Sync play/stop events, read by airplay.py.
+# Mode 666 so the shairport-sync user can write. /tmp is cleared on boot;
+# AirPlay recreates the pipe when it starts.
+BOOMBOX_EVENTS=/tmp/boombox-events
+if [[ ! -p "$BOOMBOX_EVENTS" ]]; then
+  sudo rm -f "$BOOMBOX_EVENTS"
+  sudo mkfifo -m 666 "$BOOMBOX_EVENTS"
+else
+  sudo chmod 666 "$BOOMBOX_EVENTS"
+fi
+
 # AirPlay discovery name. Installed after asound.conf so a config-triggered
 # restart uses the shared mixer. Unchanged files do not restart the service.
 install_config "$SCRIPT_DIR/shairport-sync.conf" /etc/shairport-sync.conf shairport-sync
