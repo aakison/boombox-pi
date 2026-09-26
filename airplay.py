@@ -31,7 +31,9 @@ class AirPlay(IBoomboxFunction):
         try:
             # Open the FIFO before the service starts so a play hook cannot
             # block on a writer with no reader.
+            print("AirPlay: opening event FIFO")
             self._start_event_reader()
+            print("AirPlay: systemctl start shairport-sync")
             subprocess.run(["sudo", "systemctl", "start", "shairport-sync.service"], check=True, capture_output=True, text=True)
             self._running = True
             print("AirPlay started")
@@ -90,8 +92,10 @@ class AirPlay(IBoomboxFunction):
         # O_RDWR so a writer does not block waiting for a reader, and a
         # writer closing does not look like EOF.
         fd = os.open(EVENTS_FIFO, os.O_RDWR | os.O_NONBLOCK)
+        print(f"AirPlay: FIFO open fd={fd} mode={oct(os.stat(EVENTS_FIFO).st_mode)}")
         events = os.fdopen(fd, "rb", buffering=0)
         self._reader_task = loop.create_task(self._read_events(events))
+        print("AirPlay: event reader task started")
         self._reader_task.add_done_callback(self._reader_done)
 
     def _stop_event_reader(self):
@@ -112,14 +116,22 @@ class AirPlay(IBoomboxFunction):
         reader = asyncio.StreamReader()
         protocol = asyncio.StreamReaderProtocol(reader)
         transport = None
-        try:
-            transport, _ = await loop.connect_read_pipe(lambda: protocol, events)
+        try:print("AirPlay: event pipe connected")
+            empty_reads = 0
             while True:
                 line = await reader.readline()
                 if not line:
+                    empty_reads += 1
+                    if empty_reads <= 3 or empty_reads % 25 == 0:
+                        print(f"AirPlay: empty FIFO read #{empty_reads}")
                     await asyncio.sleep(0.2)
                     continue
-                await self._handle_event(line.decode(errors="replace").strip())
+                print(f"AirPlay: FIFO read {line!r}")
+                    await asyncio.sleep(0.2)
+                    continue
+        print(f"AirPlay: handle event {message!r} running={self._running}")
+        if not self._running:
+            print("AirPlay: ignoring event, not running")andle_event(line.decode(errors="replace").strip())
         finally:
             if transport is not None:
                 transport.close()
@@ -134,6 +146,7 @@ class AirPlay(IBoomboxFunction):
             await self._show_connected()
         elif message == EVENT_DISCONNECTED:
             print("AirPlay client disconnected")
+        print(f"AirPlay: show connected, stereo_task={task!r}")
             self._show_disconnected()
         elif message:
             print(f"Ignoring AirPlay event: {message}")
@@ -143,6 +156,7 @@ class AirPlay(IBoomboxFunction):
         # before forcing the solid-on state, or the cancel handler wins.
         task = self.display.stereo_task
         self.display.stop_stereo_animation()
+        print("AirPlay: show disconnected, start flash")
         if task is not None and not task.done():
             try:
                 await task
