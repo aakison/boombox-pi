@@ -9,6 +9,7 @@ from display import Display
 MPRIS_BUS_NAME = "org.mpris.MediaPlayer2.librespot"
 MPRIS_OBJECT_PATH = "/org/mpris/MediaPlayer2"
 STEREO_FLASH_SPEED_MS = 500  # Flash speed while waiting for a device to play audio
+_UNSET = object()  # Sentinel distinct from any real PlaybackStatus (including None), forces the first poll to always act
 
 class Spotify(IBoomboxFunction):
     """Handles starting/stopping the Raspotify (Spotify Connect) service"""
@@ -53,7 +54,7 @@ class Spotify(IBoomboxFunction):
     def _start_status_polling(self):
         """Start polling MPRIS PlaybackStatus as an independent async task"""
         if self._poll_task is None or self._poll_task.done():
-            self._last_status = None
+            self._last_status = _UNSET
             self._poll_task = asyncio.create_task(self._poll_playback_status())
 
     def _stop_status_polling(self):
