@@ -119,8 +119,8 @@ class DeeJay:
         
         # Execute MPC commands to add and play the URL
         try:
-            # Turn on tuner LED when entering any band
-            self.display.show_tuner_led(True)
+            # Turn on stereo LED when entering any band
+            self.display.set_stereo(True)
             # Add the URL to MPC playlist
             add_result = subprocess.run(["mpc", "add", band.url], check=True, capture_output=True, text=True)
             print(f"Added {band.url} to playlist: {add_result.stdout.strip() or '(no output)'}")
@@ -151,8 +151,8 @@ class DeeJay:
         except FileNotFoundError:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
         
-        # Turn off tuner LED when leaving any band
-        self.display.show_tuner_led(False)
+        # Turn off stereo LED when leaving any band
+        self.display.set_stereo(False)
     
     def announce(self, text):
         """Announce text using espeak and aplay (non-blocking)"""
@@ -219,7 +219,7 @@ async def main():
     # Initialize LEDs
     display.reset_all_leds()
     
-    display.start_meter_cylon()
+    display.start_cylon_animation()
 
     try:
         while True:
