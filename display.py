@@ -53,7 +53,7 @@ class Display:
     
     def set_stereo(self, on):
         """Turn the stereo LED (pin 0) on or off"""
-        self.set_i2c_pin(0, not on)  # Invert because False = LED on
+        self.set_i2c_pin(0, on)  # Invert because False = LED on
         self.write_i2c_pins()
     
     async def _cylon_pattern(self):
