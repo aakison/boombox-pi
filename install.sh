@@ -14,7 +14,9 @@ sudo apt-get install -y \
   git \
   nano \
   python3-rpi.gpio \
-  shairport-sync
+  shairport-sync \
+  samba \
+  samba-common-bin
 
 # Copy a config file only when its content changed, restarting the given
 # service (if any) so unrelated services aren't bounced on every run.
@@ -42,6 +44,9 @@ fi
 
 # Configure Raspotify
 install_config "$SCRIPT_DIR/raspotify.conf" /etc/raspotify/conf raspotify
+
+# Share /srv/music over SMB so other devices can drop music onto the Pi
+bash "$SCRIPT_DIR/smb-share.sh"
 
 # Mount shares
 bash "$SCRIPT_DIR/smb-mount.sh"
