@@ -53,7 +53,7 @@ class Display:
     
     def set_stereo(self, on):
         """Turn the stereo LED (pin 0) on or off"""
-        self.set_i2c_pin(0, not on)  # pin state is inverted: low = LED on
+        self.set_i2c_pin(0, on)
         self.write_i2c_pins()
     
     async def _cylon_pattern(self):
@@ -96,7 +96,7 @@ class Display:
                 self.set_stereo(False)
                 await asyncio.sleep(half_cycle)
         except asyncio.CancelledError:
-            self.set_stereo(False)
+            # Don't force a state here - the caller sets the final LED state after cancelling
             print("Stopped stereo LED animation")
             raise
     
