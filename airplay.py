@@ -28,7 +28,7 @@ class AirPlay(IBoomboxFunction):
             subprocess.run(["sudo", "systemctl", "start", "shairport-sync.service"], check=True, capture_output=True, text=True)
             self._running = True
             print("AirPlay started")
-            self.announcer.announce("AirPlay")
+            self.announcer.announce("Apple AirPlay")
             self._start_status_polling()
         except subprocess.CalledProcessError as e:
             print(f"Error starting Shairport Sync: {e}")
