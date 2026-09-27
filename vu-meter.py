@@ -18,8 +18,8 @@ ANALYSIS_PERIOD_S = 1 / ANALYSIS_RATE_HZ
 WINDOW_BYTES = (SAMPLE_RATE // ANALYSIS_RATE_HZ) * BYTES_PER_SAMPLE  # One tick's worth of audio
 READ_CHUNK_BYTES = 65536  # Linux default pipe buffer size
 
-LEVEL_THRESHOLDS_DB = [-40, -34, -27, -20, -9]  # RMS dBFS needed to light LEDs 1..5
-DECAY_DB_PER_S = 20  # Slow fall so the bar doesn't flicker between ticks
+LEVEL_THRESHOLDS_DB = [-30, -26, -21, -15, -9]  # RMS dBFS needed to light LEDs 1..5
+DECAY_DB_PER_S = 40  # Slow fall so the bar doesn't flicker between ticks
 FLOOR_DB = -90.0
 FIFO_RETRY_S = 1
 
