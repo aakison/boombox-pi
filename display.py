@@ -47,7 +47,7 @@ class Display:
         """Light up the sound meter LEDs (pins 1-5) as a bar graph, 0-5 lit"""
         if not 0 <= level <= 5:
             raise ValueError("level must be between 0 and 5")
-        for i, pin in enumerate([1, 2, 3, 4, 5], start=1):
+        for i, pin in enumerate([1, 2, 5, 4, 3], start=1):
             self.set_i2c_pin(pin, i > level)  # LED on while its position is within the level
         self.write_i2c_pins()
     
