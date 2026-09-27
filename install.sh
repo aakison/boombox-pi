@@ -14,6 +14,7 @@ sudo apt-get install -y \
   git \
   nano \
   python3-rpi.gpio \
+  python3-numpy \
   shairport-sync \
   samba \
   samba-common-bin
