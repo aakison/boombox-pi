@@ -1,6 +1,9 @@
 import smbus
 import asyncio
 
+STEREO_PIN = 0
+SOUND_LEVEL_PINS = [1, 2, 5, 4, 3]  # Bar-graph order, lowest level first
+
 class Display:
     """Singleton class to control 6 LEDs on I2C interface"""
     _instance = None
@@ -31,6 +34,17 @@ class Display:
         """Write current pin state to PCF8574"""
         self.bus.write_byte(self.i2c_address, self.pin_state)
     
+    def _update_pins(self, states):
+        """Change only the given {pin: state} entries, preserving every other pin's current value"""
+        # Re-read the chip so pins driven by another process (e.g. vu-meter.py vs mp3-player.py) aren't clobbered
+        try:
+            self.pin_state = self.bus.read_byte(self.i2c_address)
+        except OSError as e:
+            print(f"Error reading PCF8574 state, using cached value: {e}")
+        for pin, state in states.items():
+            self.set_i2c_pin(pin, state)
+        self.write_i2c_pins()
+    
     def reset_all_leds(self):
         """Reset all LEDs to off state"""
         self.pin_state = 0xFF
@@ -38,23 +52,18 @@ class Display:
     
     def reset_cylon_leds(self):
         """Reset only cylon LEDs (pins 1-5) while preserving pin 0 state"""
-        # Turn off pins 1, 2, 3, 4, 5 but preserve pin 0
-        for pin in [1, 2, 3, 4, 5]:
-            self.set_i2c_pin(pin, True)  # True = LED off
-        self.write_i2c_pins()
+        self._update_pins({pin: True for pin in SOUND_LEVEL_PINS})  # True = LED off
     
     def set_sound_level(self, level):
         """Light up the sound meter LEDs (pins 1-5) as a bar graph, 0-5 lit"""
         if not 0 <= level <= 5:
             raise ValueError("level must be between 0 and 5")
-        for i, pin in enumerate([1, 2, 5, 4, 3], start=1):
-            self.set_i2c_pin(pin, i > level)  # LED on while its position is within the level
-        self.write_i2c_pins()
+        # LED on (pin low) while its position is within the level
+        self._update_pins({pin: i > level for i, pin in enumerate(SOUND_LEVEL_PINS, start=1)})
     
     def set_stereo(self, on):
         """Turn the stereo LED (pin 0) on or off"""
-        self.set_i2c_pin(0, not on)
-        self.write_i2c_pins()
+        self._update_pins({STEREO_PIN: not on})
     
     async def _cylon_pattern(self):
         """Internal async cylon pattern - runs as independent task"""
@@ -62,11 +71,8 @@ class Display:
         try:
             while True:
                 for pin in pins:
-                    # Reset only cylon LEDs (preserve pin 0 stereo LED)
-                    self.reset_cylon_leds()
-                    # Turn on current pin
-                    self.set_i2c_pin(pin, False)  # False = LED on
-                    self.write_i2c_pins()
+                    # Light only the current cylon LED (pin 0 stereo LED untouched)
+                    self._update_pins({p: p != pin for p in SOUND_LEVEL_PINS})  # False = LED on
                     await asyncio.sleep(0.15)
         except asyncio.CancelledError:
             # Clean up when task is cancelled - only reset cylon LEDs
