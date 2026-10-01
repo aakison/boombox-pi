@@ -52,4 +52,32 @@ bash "$SCRIPT_DIR/smb-share.sh"
 # Setup Bluetooth
 bash "$SCRIPT_DIR/bt-setup.sh"
 
+# Run boombox.py as a systemd service so it starts automatically on boot
+BOOMBOX_USER="${SUDO_USER:-$USER}"
+BOOMBOX_SERVICE_FILE="$(mktemp)"
+cat > "$BOOMBOX_SERVICE_FILE" <<EOF
+[Unit]
+Description=Boombox control service
+After=sound.target network.target
+
+[Service]
+ExecStart=/usr/bin/python3 ${SCRIPT_DIR}/boombox.py
+WorkingDirectory=${SCRIPT_DIR}
+User=${BOOMBOX_USER}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+if ! sudo cmp -s "$BOOMBOX_SERVICE_FILE" /etc/systemd/system/boombox.service 2>/dev/null; then
+  sudo install -m 0644 "$BOOMBOX_SERVICE_FILE" /etc/systemd/system/boombox.service
+  sudo systemctl daemon-reload
+fi
+rm -f "$BOOMBOX_SERVICE_FILE"
+
+sudo systemctl enable boombox
+sudo systemctl restart boombox
+
 echo "✅ Setup complete. Ready to stream and sync."
