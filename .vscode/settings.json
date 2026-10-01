@@ -11,15 +11,5 @@
         "setwarnings",
         "spidev",
         "xfer"
-    ],
-    "chat.tools.terminal.autoApprove": {
-        "/^python -c 'from unittest\\.mock import patch; from idle import Idle; from boombox_function import IBoomboxFunction; mock = patch\\(\"idle\\.Announcer\"\\)\\.start\\(\\); idle = Idle\\(\\); assert isinstance\\(idle, IBoomboxFunction\\); assert not idle\\.is_running\\(\\); idle\\.start\\(\\); assert idle\\.is_running\\(\\); idle\\.start\\(\\); mock\\.return_value\\.announce\\.assert_called_once_with\\(\"Radio off, all bands\"\\); idle\\.stop\\(\\); assert not idle\\.is_running\\(\\); idle\\.stop\\(\\); idle\\.start\\(\\); assert mock\\.return_value\\.announce\\.call_count == 2; print\\(\"Idle lifecycle OK\"\\)'$/": {
-            "approve": true,
-            "matchCommandLine": true
-        },
-        "/^if \\(Test-Path \\.gitignore\\) \\{ Get-Content \\.gitignore \\} else \\{ Write-Output 'MISSING_GITIGNORE' \\}$/": {
-            "approve": true,
-            "matchCommandLine": true
-        }
-    }
+    ]
 }

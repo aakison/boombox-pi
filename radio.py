@@ -158,6 +158,8 @@ async def main():
     try:
         while True:
             await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        pass
     except KeyboardInterrupt:
         print("\nStopping Radio...")
     finally:

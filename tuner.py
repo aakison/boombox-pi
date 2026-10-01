@@ -225,6 +225,8 @@ async def main():
             # Sleep for approximately 1/60th of a second (60 Hz)
             await asyncio.sleep(1/60)
             
+    except asyncio.CancelledError:
+        pass
     except KeyboardInterrupt:
         print("\nProgram terminated by user.")
     finally:
