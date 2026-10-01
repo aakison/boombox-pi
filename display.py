@@ -36,7 +36,7 @@ class Display:
     
     def _update_pins(self, states):
         """Change only the given {pin: state} entries, preserving every other pin's current value"""
-        # Re-read the chip so pins driven by another process (e.g. vu-meter.py vs mp3_player.py) aren't clobbered
+        # Re-read the chip so pins driven by another process (e.g. vu_meter.py vs mp3_player.py) aren't clobbered
         try:
             self.pin_state = self.bus.read_byte(self.i2c_address)
         except OSError as e:

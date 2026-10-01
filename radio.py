@@ -5,6 +5,7 @@ from boombox_function import IBoomboxFunction
 from announcer import Announcer
 from display import Display
 from input import Input
+from vu_meter import VUMeter
 
 TUNER_SAMPLES = 4  # Number of ADC samples averaged per tuner reading
 TUNER_POLL_INTERVAL_S = 1 / 60  # 60 Hz poll rate for the tuner dial
@@ -44,6 +45,7 @@ class Radio(IBoomboxFunction):
         self.input = Input()
         self.announcer = Announcer()
         self.display = Display()
+        self.vu_meter = VUMeter()
         self._running = False
         self._poll_task = None
         self._current_band = None
@@ -53,6 +55,7 @@ class Radio(IBoomboxFunction):
         if self._running:
             return
         self._running = True
+        self.vu_meter.start()
         self._poll_task = asyncio.create_task(self._run())
         print("Radio started")
 
@@ -64,6 +67,7 @@ class Radio(IBoomboxFunction):
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
         self._poll_task = None
+        self.vu_meter.stop()
         if self._current_band is not None:
             self._leave_band(BANDS[self._current_band], 0)
             self._current_band = None

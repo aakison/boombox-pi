@@ -8,6 +8,7 @@ from boombox_function import IBoomboxFunction
 from announcer import Announcer
 from display import Display
 from input import Input
+from vu_meter import VUMeter
 
 MUSIC_DIR = "/srv/music"
 STEREO_FLASH_SPEED_MS = 250  # Flash speed while scanning the MP3 library
@@ -26,6 +27,7 @@ class Mp3Player(IBoomboxFunction):
         self.announcer = Announcer()
         self.display = Display()
         self.input = Input()
+        self.vu_meter = VUMeter()
         self._running = False
         self._tracks = []
         self._history = deque(maxlen=HISTORY_SIZE)
@@ -40,6 +42,7 @@ class Mp3Player(IBoomboxFunction):
         if self._running:
             return
         self._running = True
+        self.vu_meter.start()
         self._playback_task = asyncio.create_task(self._run())
         self._fine_tune_task = asyncio.create_task(self._watch_fine_tune())
 
@@ -62,6 +65,7 @@ class Mp3Player(IBoomboxFunction):
         except FileNotFoundError:
             print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
         finally:
+            self.vu_meter.stop()
             self.display.stop_stereo_animation()
             self.display.set_stereo(False)
             print("MP3 Player stopped")
