@@ -24,11 +24,13 @@ class Spotify(IBoomboxFunction):
         """Start the Raspotify service"""
         if self._running:
             return
+        # Announce before starting the daemon so speech plays concurrently instead of
+        # being delayed behind the blocking systemctl call.
+        self.announcer.announce("Spotify Connect")
         try:
             subprocess.run(["sudo", "systemctl", "start", "raspotify.service"], check=True, capture_output=True, text=True)
             self._running = True
             print("Spotify Connect started")
-            self.announcer.announce("Spotify Connect")
             self._start_status_polling()
         except subprocess.CalledProcessError as e:
             print(f"Error starting Raspotify: {e}")
