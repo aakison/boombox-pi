@@ -11,6 +11,7 @@ from input import Input
 from vu_meter import VUMeter
 
 MUSIC_DIR = "/srv/music"
+LAST_TRACK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mp3_player_last_track")
 STEREO_FLASH_SPEED_MS = 250  # Flash speed while scanning the MP3 library
 HISTORY_SIZE = 20  # Number of recently played tracks to avoid repeating
 POLL_INTERVAL_S = 1  # How often to check whether the current track has finished
@@ -34,6 +35,7 @@ class Mp3Player(IBoomboxFunction):
         self._playback_task = None
         self._fine_tune_task = None
         self._current_track = None
+        self._resume_track = None
         self._restart_requested = False
         self._track_control_event = asyncio.Event()
 
@@ -57,6 +59,7 @@ class Mp3Player(IBoomboxFunction):
         if self._fine_tune_task and not self._fine_tune_task.done():
             self._fine_tune_task.cancel()
         self._fine_tune_task = None
+        self._save_last_track()
         try:
             subprocess.run(["mpc", "stop"], check=True, capture_output=True, text=True)
             subprocess.run(["mpc", "clear"], check=True, capture_output=True, text=True)
@@ -76,6 +79,7 @@ class Mp3Player(IBoomboxFunction):
 
     async def _run(self):
         """Load the library (flashing the display), then play random tracks until stopped"""
+        self.announcer.announce("MP3 Player")
         self.display.start_stereo_animation(STEREO_FLASH_SPEED_MS)
         await asyncio.to_thread(self._update_mpd_database)
         self._tracks = await asyncio.to_thread(self._scan_library)
@@ -88,15 +92,19 @@ class Mp3Player(IBoomboxFunction):
             return
 
         self.display.set_stereo(True)
-        self.announcer.announce("MP3 Player")
+        self._resume_track = self._load_last_track()
 
         try:
             while self._running:
                 if self._restart_requested and self._current_track is not None:
                     track = self._current_track
+                elif self._resume_track is not None:
+                    track = self._resume_track
+                    self._history.append(track)
                 else:
                     track = self._choose_track()
-                    self._current_track = track
+                self._resume_track = None
+                self._current_track = track
                 self._restart_requested = False
                 self._track_control_event.clear()
                 if self._play_track(track):
@@ -135,6 +143,25 @@ class Mp3Player(IBoomboxFunction):
         track = random.choice(candidates)
         self._history.append(track)
         return track
+
+    def _save_last_track(self):
+        """Persist the currently playing track so playback can resume from the same spot next start"""
+        if self._current_track is None:
+            return
+        try:
+            with open(LAST_TRACK_FILE, "w") as f:
+                f.write(self._current_track)
+        except OSError as e:
+            print(f"Error saving last track to {LAST_TRACK_FILE!r}: {e}")
+
+    def _load_last_track(self):
+        """Return the previously saved track if it still exists in the library, else None"""
+        try:
+            with open(LAST_TRACK_FILE, "r") as f:
+                track = f.read().strip()
+        except OSError:
+            return None
+        return track if track in self._tracks else None
 
     def _play_track(self, track):
         """Clear the MPC playlist and start playing the given track (path relative to MUSIC_DIR)"""
