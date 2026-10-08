@@ -1,2 +1,3 @@
 __pycache__/
 .mp3_player_last_track
+.mp3_player_skip_tracks

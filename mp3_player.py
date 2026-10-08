@@ -12,6 +12,7 @@ from vu_meter import VUMeter
 
 MUSIC_DIR = "/srv/music"
 LAST_TRACK_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mp3_player_last_track")
+SKIP_TRACKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".mp3_player_skip_tracks")
 STEREO_FLASH_SPEED_MS = 250  # Flash speed while scanning the MP3 library
 HISTORY_SIZE = 20  # Number of recently played tracks to avoid repeating
 POLL_INTERVAL_S = 1  # How often to check whether the current track has finished
@@ -228,8 +229,19 @@ class Mp3Player(IBoomboxFunction):
 
     def _request_next_track(self):
         """Interrupt playback so the player immediately moves on to a new random track"""
+        self._log_skipped_track()
         self._restart_requested = False
         self._track_control_event.set()
+
+    def _log_skipped_track(self):
+        """Append the currently playing track to the skip log"""
+        if self._current_track is None:
+            return
+        try:
+            with open(SKIP_TRACKS_FILE, "a") as f:
+                f.write(self._current_track + "\n")
+        except OSError as e:
+            print(f"Error logging skipped track to {SKIP_TRACKS_FILE!r}: {e}")
 
     def _request_restart_track(self):
         """Interrupt playback so the player immediately replays the current track from the start"""
