@@ -1,7 +1,11 @@
 import asyncio
+import subprocess
 
 import smbus
 from PIL import Image, ImageDraw, ImageFont
+
+MPD_HOST = "boombox"  # Hostname of the Pi running MPD; this Pi only drives the display
+POLL_INTERVAL_S = 1  # How often to poll MPC for the current artist/track
 
 I2C_BUS = 1
 I2C_ADDRESS = 0x3C  # Default for these 0.91" SSD1306 clones; some boards reply on 0x3D instead
@@ -149,8 +153,29 @@ def _image_to_gddram(image):
     return list(buffer)
 
 
+def _get_current_track():
+    """Query MPD on MPD_HOST for the currently playing artist and track title via MPC"""
+    try:
+        result = subprocess.run(
+            ["mpc", "-h", MPD_HOST, "current", "--format", "%artist%\t%title%"],
+            check=True, capture_output=True, text=True,
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"Error querying MPC (exit {e.returncode}): stdout={e.stdout!r} stderr={e.stderr!r}")
+        return "", ""
+    except FileNotFoundError:
+        print("Error: MPC command not found. Please ensure MPD/MPC is installed.")
+        return "", ""
+
+    line = result.stdout.strip()
+    if not line:
+        return "", "Nothing playing"
+    artist, _, title = line.partition("\t")
+    return artist, title
+
+
 async def main():
-    """Blink the whole screen on and off every 500ms to prove out I2C wiring and addressing"""
+    """Poll MPD on MPD_HOST once a second, alternating the display between artist and track title"""
     display = OledDisplay()
     if not display.is_connected():
         print(f"No OLED detected at 0x{I2C_ADDRESS:02X} - check wiring/address and try again")
@@ -158,12 +183,12 @@ async def main():
 
     display.init_display()
     try:
-        state = True
+        show_artist = True
         while True:
-            display.draw_text("AC / DC")
-            await asyncio.sleep(1)
-            display.draw_text("You shook me all night long")
-            await asyncio.sleep(1)
+            artist, title = await asyncio.to_thread(_get_current_track)
+            display.draw_text(artist if show_artist else title)
+            show_artist = not show_artist
+            await asyncio.sleep(POLL_INTERVAL_S)
     except (KeyboardInterrupt, asyncio.CancelledError):
         # Ctrl+C cancels the running task (raising CancelledError here), not KeyboardInterrupt directly
         print("\nProgram terminated by user.")
