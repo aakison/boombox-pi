@@ -11,8 +11,9 @@ HEIGHT = 32
 PAGES = HEIGHT // 8  # SSD1306 GDDRAM is addressed in 8-pixel-tall pages
 
 # Change these to try different installed fonts/sizes without touching any drawing code
-FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+# FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 # FONT_PATH = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+FONT_PATH = "/home/adrian/boombox-pi/terminal16.ttf"
 FONT_SIZE = 16
 
 CONTROL_COMMAND = 0x00
