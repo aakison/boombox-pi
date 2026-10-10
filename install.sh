@@ -18,6 +18,7 @@ sudo apt-get install -y \
   python3-smbus \
   python3-pil \
   fonts-dejavu-core \
+  fonts-liberation \
   i2c-tools \
   shairport-sync \
   samba \

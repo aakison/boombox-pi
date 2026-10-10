@@ -12,6 +12,7 @@ PAGES = HEIGHT // 8  # SSD1306 GDDRAM is addressed in 8-pixel-tall pages
 
 # Change these to try different installed fonts/sizes without touching any drawing code
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+# FONT_PATH = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
 FONT_SIZE = 16
 
 CONTROL_COMMAND = 0x00
@@ -102,7 +103,7 @@ class OledDisplay:
         draw = ImageDraw.Draw(image)
 
         _, top, _, bottom = font.getbbox("Ay")
-        line_height = bottom - top
+        line_height = bottom - top - 1  # Tighten slightly so 2 lines fit the 32px panel without clipping descenders
         y = 0
         for line in _wrap_text(draw, text, font, WIDTH):
             draw.text((0, y), line, fill=255, font=font)
