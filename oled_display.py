@@ -158,14 +158,12 @@ async def main():
 
     display.init_display()
     try:
-        display.draw_text("You shook me all night long")
-        await asyncio.sleep(3)
-
         state = True
         while True:
-            display.fill(state)
-            state = not state
-            await asyncio.sleep(0.5)
+            display.draw_text("AC / DC")
+            await asyncio.sleep(1)
+            display.draw_text("You shook me all night long")
+            await asyncio.sleep(1)
     except KeyboardInterrupt:
         print("\nProgram terminated by user.")
     finally:
