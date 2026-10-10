@@ -18,6 +18,7 @@ PAGES = HEIGHT // 8  # SSD1306 GDDRAM is addressed in 8-pixel-tall pages
 FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 # FONT_PATH = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
 FONT_SIZE = 16
+FONT_SIZE_LARGE = 24  # Used when the text fits on one line at this size, else falls back to FONT_SIZE
 
 CONTROL_COMMAND = 0x00
 CONTROL_DATA = 0x40
@@ -100,16 +101,21 @@ class OledDisplay:
         """Turn off every pixel"""
         self.fill(False)
 
-    def draw_text(self, text, font_path=FONT_PATH, font_size=FONT_SIZE):
-        """Render (word-wrapped) text to the full frame using a TrueType font"""
-        font = ImageFont.truetype(font_path, font_size)
+    def draw_text(self, text, font_path=FONT_PATH):
+        """Render text to the full frame, preferring FONT_SIZE_LARGE if it fits on one line unwrapped"""
         image = Image.new("L", (WIDTH, HEIGHT), 0)
         draw = ImageDraw.Draw(image)
+
+        font = ImageFont.truetype(font_path, FONT_SIZE_LARGE)
+        lines = _wrap_text(draw, text, font, WIDTH)
+        if len(lines) > 1:
+            font = ImageFont.truetype(font_path, FONT_SIZE)
+            lines = _wrap_text(draw, text, font, WIDTH)
 
         _, top, _, bottom = font.getbbox("Ay")
         line_height = bottom - top - 1  # Tighten slightly so 2 lines fit the 32px panel without clipping descenders
         y = 0
-        for line in _wrap_text(draw, text, font, WIDTH):
+        for line in lines:
             draw.text((0, y), line, fill=255, font=font)
             y += line_height
 
