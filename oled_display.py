@@ -1,6 +1,7 @@
 import asyncio
 
 import smbus
+from PIL import Image, ImageDraw, ImageFont
 
 I2C_BUS = 1
 I2C_ADDRESS = 0x3C  # Default for these 0.91" SSD1306 clones; some boards reply on 0x3D instead
@@ -8,6 +9,10 @@ I2C_ADDRESS = 0x3C  # Default for these 0.91" SSD1306 clones; some boards reply 
 WIDTH = 128
 HEIGHT = 32
 PAGES = HEIGHT // 8  # SSD1306 GDDRAM is addressed in 8-pixel-tall pages
+
+# Change these to try different installed fonts/sizes without touching any drawing code
+FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+FONT_SIZE = 16
 
 CONTROL_COMMAND = 0x00
 CONTROL_DATA = 0x40
@@ -90,9 +95,57 @@ class OledDisplay:
         """Turn off every pixel"""
         self.fill(False)
 
+    def draw_text(self, text, font_path=FONT_PATH, font_size=FONT_SIZE):
+        """Render (word-wrapped) text to the full frame using a TrueType font"""
+        font = ImageFont.truetype(font_path, font_size)
+        image = Image.new("L", (WIDTH, HEIGHT), 0)
+        draw = ImageDraw.Draw(image)
+
+        _, top, _, bottom = font.getbbox("Ay")
+        line_height = bottom - top
+        y = 0
+        for line in _wrap_text(draw, text, font, WIDTH):
+            draw.text((0, y), line, fill=255, font=font)
+            y += line_height
+
+        bitmap = image.convert("1", dither=Image.NONE)  # Hard threshold - no dithering on a 1-bit panel
+        self._set_addressing_window()
+        self._write_data(_image_to_gddram(bitmap))
+
     def set_power(self, on):
         """Turn the display panel on or off without touching GDDRAM contents"""
         self._write_command(0xAF if on else 0xAE)
+
+
+def _wrap_text(draw, text, font, max_width):
+    """Greedily wrap text into lines that fit max_width pixels, measured with the given font"""
+    lines = []
+    current = ""
+    for word in text.split():
+        candidate = f"{current} {word}".strip()
+        if draw.textlength(candidate, font=font) <= max_width:
+            current = candidate
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _image_to_gddram(image):
+    """Pack a 1-bit PIL image into SSD1306 paged GDDRAM byte layout (8 vertical pixels per byte, LSB on top)"""
+    pixels = image.load()
+    buffer = bytearray(WIDTH * PAGES)
+    for page in range(PAGES):
+        for x in range(WIDTH):
+            byte = 0
+            for bit in range(8):
+                if pixels[x, page * 8 + bit]:
+                    byte |= 1 << bit
+            buffer[page * WIDTH + x] = byte
+    return list(buffer)
 
 
 async def main():
@@ -104,6 +157,9 @@ async def main():
 
     display.init_display()
     try:
+        display.draw_text("You shook me all night long")
+        await asyncio.sleep(3)
+
         state = True
         while True:
             display.fill(state)

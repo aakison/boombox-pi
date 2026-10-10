@@ -15,6 +15,10 @@ sudo apt-get install -y \
   nano \
   python3-rpi.gpio \
   python3-numpy \
+  python3-smbus \
+  python3-pil \
+  fonts-dejavu-core \
+  i2c-tools \
   shairport-sync \
   samba \
   samba-common-bin
