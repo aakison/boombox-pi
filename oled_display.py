@@ -107,8 +107,9 @@ class OledDisplay:
         draw = ImageDraw.Draw(image)
 
         font = ImageFont.truetype(font_path, FONT_SIZE_LARGE)
-        lines = _wrap_text(draw, text, font, WIDTH)
-        if len(lines) > 1:
+        if draw.textlength(text, font=font) <= WIDTH:
+            lines = [text]
+        else:
             font = ImageFont.truetype(font_path, FONT_SIZE)
             lines = _wrap_text(draw, text, font, WIDTH)
 
