@@ -11,8 +11,7 @@ HEIGHT = 32
 PAGES = HEIGHT // 8  # SSD1306 GDDRAM is addressed in 8-pixel-tall pages
 
 # Change these to try different installed fonts/sizes without touching any drawing code
-#FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-FONT_PATH = "/home/adrian/boombox-pi/TAHOMA.TTF"
+FONT_PATH = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 FONT_SIZE = 16
 
 CONTROL_COMMAND = 0x00
@@ -162,7 +161,7 @@ async def main():
         while True:
             display.draw_text("AC / DC")
             await asyncio.sleep(1)
-            display.draw_text("You shook me all night long")
+            display.draw_text("You shogk me all night long")
             await asyncio.sleep(1)
     except KeyboardInterrupt:
         print("\nProgram terminated by user.")
