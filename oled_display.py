@@ -164,7 +164,8 @@ async def main():
             await asyncio.sleep(1)
             display.draw_text("You shook me all night long")
             await asyncio.sleep(1)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        # Ctrl+C cancels the running task (raising CancelledError here), not KeyboardInterrupt directly
         print("\nProgram terminated by user.")
     finally:
         display.clear()
