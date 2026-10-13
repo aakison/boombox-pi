@@ -57,11 +57,41 @@ class I2CMultiplexer:
         self.address = address
         self._active_channel = None
 
+    def is_connected(self):
+        """Return True if the mux itself acknowledges on the main I2C bus"""
+        try:
+            self.bus.write_quick(self.address)
+            return True
+        except OSError as e:
+            print(f"TCA9548A mux not responding at 0x{self.address:02X}: {e}")
+            return False
+
     def select_channel(self, channel):
         """Enable only the given channel (0-7), skipping the write if it's already active"""
         if channel != self._active_channel:
             self.bus.write_byte(self.address, 1 << channel)
             self._active_channel = channel
+
+    def read_active_channel(self):
+        """Read back the mux's channel-select register, for debugging whether a select actually took"""
+        try:
+            return self.bus.read_byte(self.address)
+        except OSError as e:
+            print(f"Could not read back mux channel-select register at 0x{self.address:02X}: {e}")
+            return None
+
+    def scan_channel(self, channel):
+        """Print every address that acks on the given channel, like running i2cdetect on it"""
+        self.select_channel(channel)
+        found = []
+        for addr in range(0x03, 0x78):
+            try:
+                self.bus.write_quick(addr)
+                found.append(addr)
+            except OSError:
+                pass
+        addrs = ", ".join(f"0x{a:02X}" for a in found) if found else "none"
+        print(f"Mux channel {channel}: devices found at {addrs}")
 
 
 class OledDisplay:
@@ -73,13 +103,23 @@ class OledDisplay:
         self.address = address
 
     def is_connected(self):
-        """Return True if the display acknowledges on the I2C bus, for a basic wiring/address check"""
+        """Return True if the display acknowledges a write on the I2C bus
+
+        Many cheap SSD1306 clones are write-only slaves that never ack a read,
+        so a write_quick probe is used instead of reading a byte back.
+        """
         try:
             self.mux.select_channel(self.channel)
-            self.mux.bus.read_byte(self.address)
+        except OSError as e:
+            print(f"Could not select mux channel {self.channel} on 0x{self.mux.address:02X}: {e}")
+            return False
+
+        try:
+            self.mux.bus.write_quick(self.address)
             return True
         except OSError as e:
             print(f"OLED not responding at 0x{self.address:02X} on mux channel {self.channel}: {e}")
+            self.mux.scan_channel(self.channel)
             return False
 
     def _write_command(self, *commands):
@@ -198,6 +238,10 @@ def _get_current_track():
 async def main():
     """Poll MPD on MPD_HOST once a second, showing artist on one OLED and track title on the other"""
     mux = I2CMultiplexer()
+    if not mux.is_connected():
+        print(f"No TCA9548A mux detected at 0x{MUX_ADDRESS:02X} on bus {I2C_BUS} - check wiring/address")
+        return
+
     artist_display = OledDisplay(mux, MUX_CHANNEL_ARTIST)
     title_display = OledDisplay(mux, MUX_CHANNEL_TITLE)
 
