@@ -28,25 +28,28 @@ CONTROL_COMMAND = 0x00
 CONTROL_DATA = 0x40
 MAX_I2C_BLOCK = 32  # smbus write_i2c_block_data payload limit, so writes are sent in chunks
 
-# Standard SSD1306 startup sequence for a 128x32 panel
-INIT_SEQUENCE = [
-    0xAE,              # Display off
-    0xD5, 0x80,        # Set display clock divide ratio/oscillator frequency
-    0xA8, HEIGHT - 1,  # Set multiplex ratio
-    0xD3, 0x00,        # Set display offset
-    0x40,              # Set display start line = 0
-    0x8D, 0x14,        # Enable charge pump
-    0x20, 0x00,        # Memory addressing mode = horizontal
-    0xA1,              # Segment remap (column 127 mapped to SEG0)
-    0xC8,              # COM output scan direction, remapped
-    0xDA, 0x02,        # COM pins hardware configuration
-    0x81, 0x8F,        # Set contrast
-    0xD9, 0xF1,        # Set pre-charge period
-    0xDB, 0x40,        # Set VCOMH deselect level
-    0xA4,              # Resume to RAM content display
-    0xA6,              # Normal (not inverted) display
-    0xAF,              # Display on
-]
+def _build_init_sequence(rotate_180):
+    """Standard SSD1306 startup sequence for a 128x32 panel, optionally flipped 180 degrees"""
+    segment_remap = 0xA0 if rotate_180 else 0xA1
+    com_scan_direction = 0xC0 if rotate_180 else 0xC8
+    return [
+        0xAE,              # Display off
+        0xD5, 0x80,        # Set display clock divide ratio/oscillator frequency
+        0xA8, HEIGHT - 1,  # Set multiplex ratio
+        0xD3, 0x00,        # Set display offset
+        0x40,              # Set display start line = 0
+        0x8D, 0x14,        # Enable charge pump
+        0x20, 0x00,        # Memory addressing mode = horizontal
+        segment_remap,
+        com_scan_direction,
+        0xDA, 0x02,        # COM pins hardware configuration
+        0x81, 0x8F,        # Set contrast
+        0xD9, 0xF1,        # Set pre-charge period
+        0xDB, 0x40,        # Set VCOMH deselect level
+        0xA4,              # Resume to RAM content display
+        0xA6,              # Normal (not inverted) display
+        0xAF,              # Display on
+    ]
 
 
 class I2CMultiplexer:
@@ -97,10 +100,11 @@ class I2CMultiplexer:
 class OledDisplay:
     """Driver for a 0.91" 128x32 SSD1306-based I2C OLED module, reached through a TCA9548A mux channel"""
 
-    def __init__(self, mux, channel, address=I2C_ADDRESS):
+    def __init__(self, mux, channel, address=I2C_ADDRESS, rotate_180=False):
         self.mux = mux
         self.channel = channel
         self.address = address
+        self.rotate_180 = rotate_180
 
     def is_connected(self):
         """Return True if the display acknowledges a write on the I2C bus
@@ -136,7 +140,7 @@ class OledDisplay:
 
     def init_display(self):
         """Run the SSD1306 startup sequence and blank the screen"""
-        self._write_command(*INIT_SEQUENCE)
+        self._write_command(*_build_init_sequence(self.rotate_180))
         self.clear()
         print("OLED display initialised")
 
@@ -243,7 +247,7 @@ async def main():
         return
 
     artist_display = OledDisplay(mux, MUX_CHANNEL_ARTIST)
-    title_display = OledDisplay(mux, MUX_CHANNEL_TITLE)
+    title_display = OledDisplay(mux, MUX_CHANNEL_TITLE, rotate_180=True)
 
     displays_ok = True
     for display in (artist_display, title_display):
