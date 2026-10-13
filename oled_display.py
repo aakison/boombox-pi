@@ -10,6 +10,10 @@ POLL_INTERVAL_S = 1  # How often to poll MPC for the current artist/track
 I2C_BUS = 1
 I2C_ADDRESS = 0x3C  # Default for these 0.91" SSD1306 clones; some boards reply on 0x3D instead
 
+MUX_ADDRESS = 0x70  # Default TCA9548A address
+MUX_CHANNEL_ARTIST = 0  # Display wired to the mux's SD0/SC0 pair
+MUX_CHANNEL_TITLE = 1  # Display wired to the mux's SD1/SC1 pair
+
 WIDTH = 128
 HEIGHT = 32
 PAGES = HEIGHT // 8  # SSD1306 GDDRAM is addressed in 8-pixel-tall pages
@@ -45,40 +49,50 @@ INIT_SEQUENCE = [
 ]
 
 
+class I2CMultiplexer:
+    """Thin wrapper around a TCA9548A that selects one downstream channel at a time on a shared bus"""
+
+    def __init__(self, bus=I2C_BUS, address=MUX_ADDRESS):
+        self.bus = smbus.SMBus(bus)
+        self.address = address
+        self._active_channel = None
+
+    def select_channel(self, channel):
+        """Enable only the given channel (0-7), skipping the write if it's already active"""
+        if channel != self._active_channel:
+            self.bus.write_byte(self.address, 1 << channel)
+            self._active_channel = channel
+
+
 class OledDisplay:
-    """Singleton class driving a 0.91" 128x32 SSD1306-based I2C OLED module"""
-    _instance = None
-    _initialized = False
+    """Driver for a 0.91" 128x32 SSD1306-based I2C OLED module, reached through a TCA9548A mux channel"""
 
-    def __new__(cls, *args, **kwargs):
-        if cls._instance is None:
-            cls._instance = super(OledDisplay, cls).__new__(cls)
-        return cls._instance
-
-    def __init__(self, bus=I2C_BUS, address=I2C_ADDRESS):
-        if not OledDisplay._initialized:
-            self.bus = smbus.SMBus(bus)
-            self.address = address
-            OledDisplay._initialized = True
+    def __init__(self, mux, channel, address=I2C_ADDRESS):
+        self.mux = mux
+        self.channel = channel
+        self.address = address
 
     def is_connected(self):
         """Return True if the display acknowledges on the I2C bus, for a basic wiring/address check"""
         try:
-            self.bus.read_byte(self.address)
+            self.mux.select_channel(self.channel)
+            self.mux.bus.read_byte(self.address)
             return True
         except OSError as e:
-            print(f"OLED not responding at 0x{self.address:02X}: {e}")
+            print(f"OLED not responding at 0x{self.address:02X} on mux channel {self.channel}: {e}")
             return False
 
     def _write_command(self, *commands):
         """Send one or more command bytes"""
-        self.bus.write_i2c_block_data(self.address, CONTROL_COMMAND, list(commands))
+        self.mux.select_channel(self.channel)
+        self.mux.bus.write_i2c_block_data(self.address, CONTROL_COMMAND, list(commands))
 
     def _write_data(self, data):
         """Send raw pixel data to GDDRAM, chunked to fit the I2C block size limit"""
+        self.mux.select_channel(self.channel)
         for start in range(0, len(data), MAX_I2C_BLOCK):
             chunk = data[start:start + MAX_I2C_BLOCK]
-            self.bus.write_i2c_block_data(self.address, CONTROL_DATA, chunk)
+            self.mux.bus.write_i2c_block_data(self.address, CONTROL_DATA, chunk)
 
     def init_display(self):
         """Run the SSD1306 startup sequence and blank the screen"""
@@ -182,26 +196,39 @@ def _get_current_track():
 
 
 async def main():
-    """Poll MPD on MPD_HOST once a second, alternating the display between artist and track title"""
-    display = OledDisplay()
-    if not display.is_connected():
-        print(f"No OLED detected at 0x{I2C_ADDRESS:02X} - check wiring/address and try again")
+    """Poll MPD on MPD_HOST once a second, showing artist on one OLED and track title on the other"""
+    mux = I2CMultiplexer()
+    artist_display = OledDisplay(mux, MUX_CHANNEL_ARTIST)
+    title_display = OledDisplay(mux, MUX_CHANNEL_TITLE)
+
+    displays_ok = True
+    for display in (artist_display, title_display):
+        if not display.is_connected():
+            print(f"No OLED detected on mux channel {display.channel} (address 0x{I2C_ADDRESS:02X}) "
+                  "- check wiring/address and try again")
+            displays_ok = False
+    if not displays_ok:
         return
 
-    display.init_display()
+    for display in (artist_display, title_display):
+        display.init_display()
     try:
-        show_artist = True
         while True:
             artist, title = await asyncio.to_thread(_get_current_track)
-            display.draw_text(artist if show_artist else title)
-            show_artist = not show_artist
+            if title == "Nothing playing":
+                artist_display.clear()
+                title_display.clear()
+            else:
+                artist_display.draw_text(artist)
+                title_display.draw_text(title)
             await asyncio.sleep(POLL_INTERVAL_S)
     except (KeyboardInterrupt, asyncio.CancelledError):
         # Ctrl+C cancels the running task (raising CancelledError here), not KeyboardInterrupt directly
         print("\nProgram terminated by user.")
     finally:
-        display.clear()
-        display.set_power(False)
+        for display in (artist_display, title_display):
+            display.clear()
+            display.set_power(False)
 
 if __name__ == "__main__":
     asyncio.run(main())
