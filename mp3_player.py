@@ -79,11 +79,14 @@ class Mp3Player(IBoomboxFunction):
         return self._running
 
     async def _run(self):
-        """Load the library (flashing the display), then play random tracks until stopped"""
+        """Announce the mode, flash the display, and scan the library all at once, then play random tracks until stopped"""
         self.display.start_stereo_animation(STEREO_FLASH_SPEED_MS)
-        self.announcer.announce("MP3 Player")
-        await asyncio.to_thread(self._update_mpd_database)
-        self._tracks = await asyncio.to_thread(self._scan_library)
+        # Run on separate threads so the blocking announce/mpc calls don't stall the display animation
+        _, _, self._tracks = await asyncio.gather(
+            asyncio.to_thread(self.announcer.announce, "MP3 Player"),
+            asyncio.to_thread(self._update_mpd_database),
+            asyncio.to_thread(self._scan_library),
+        )
         self.display.stop_stereo_animation()
 
         if not self._tracks:
